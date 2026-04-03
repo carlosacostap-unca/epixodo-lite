@@ -1,2 +1,4 @@
-[providers.node]
-nodeVersion = "20"
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm"]
