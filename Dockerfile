@@ -15,6 +15,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Pass PocketBase URL during build time
+ARG NEXT_PUBLIC_POCKETBASE_URL
+ENV NEXT_PUBLIC_POCKETBASE_URL=$NEXT_PUBLIC_POCKETBASE_URL
+
 # Next.js telemetry is disabled
 ENV NEXT_TELEMETRY_DISABLED=1
 
