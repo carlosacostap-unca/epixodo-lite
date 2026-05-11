@@ -120,3 +120,25 @@ test('shows a clear error when quick voice task saving fails', async ({ page }) 
     page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
   ).toHaveCount(0);
 });
+
+test('shows quick voice fallback cards in Tareas when stored without plazo', async ({ page, request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createProject',
+      project: {
+        title: 'Fallback sin plazo',
+        description: 'Creada desde captura rapida por voz.',
+        plazo: '',
+      },
+    },
+  });
+
+  await page.goto('/');
+
+  await expect(
+    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Fallback sin plazo' }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId('project-section-sin-plazo').getByRole('heading', { name: 'Fallback sin plazo' }),
+  ).toHaveCount(0);
+});

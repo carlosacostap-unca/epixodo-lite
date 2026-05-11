@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatProjectDate } from '@/lib/formatDate';
 import { updateProjectOrder } from '@/lib/data';
+import { getProjectSection, getStoredProjectSection } from '@/lib/projectSections';
 
 type ProjectPlazo = Project['plazo'];
 
@@ -101,15 +102,15 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
   };
 
   const moveProjectToColumn = async (project: Project, newPlazo: ProjectPlazo) => {
-    if ((project.plazo || '') === newPlazo) {
+    if (getProjectSection(project) === newPlazo) {
       setMoveProject(null);
       return;
     }
 
     setIsMovingProject(true);
-    const columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== project.id);
+    const columnProjects = projects.filter(p => getProjectSection(p) === newPlazo && p.id !== project.id);
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
-    columnProjects.push({ ...project, plazo: newPlazo });
+    columnProjects.push({ ...project, plazo: getStoredProjectSection(project, newPlazo) });
 
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
     applyProjectOrder(updatedProjects);
@@ -158,12 +159,12 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     const targetProject = projects.find(p => p.id === targetProjectId);
     if (!draggedProject || !targetProject) return;
 
-    const targetPlazo = targetProject.plazo || '';
-    const columnProjects = projects.filter(p => (p.plazo || '') === targetPlazo && p.id !== draggedId);
+    const targetPlazo = getProjectSection(targetProject);
+    const columnProjects = projects.filter(p => getProjectSection(p) === targetPlazo && p.id !== draggedId);
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const targetIndex = columnProjects.findIndex(p => p.id === targetProjectId);
-    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: targetPlazo });
+    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: getStoredProjectSection(draggedProject, targetPlazo) });
 
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
     applyProjectOrder(updatedProjects);
@@ -178,9 +179,9 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     const draggedProject = projects.find(p => p.id === draggedId);
     if (!draggedProject) return;
 
-    const columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== draggedId);
+    const columnProjects = projects.filter(p => getProjectSection(p) === newPlazo && p.id !== draggedId);
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
-    columnProjects.push({ ...draggedProject, plazo: newPlazo });
+    columnProjects.push({ ...draggedProject, plazo: getStoredProjectSection(draggedProject, newPlazo) });
 
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
     applyProjectOrder(updatedProjects);
@@ -196,7 +197,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
       ) : null}
       {COLUMNS.map(column => {
         const columnProjects = projects
-          .filter(p => (p.plazo || '') === column.id)
+          .filter(p => getProjectSection(p) === column.id)
           .sort((a, b) => (a.order || 0) - (b.order || 0));
         return (
           <div
@@ -284,7 +285,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
             </p>
             <div className="mt-5 grid grid-cols-1 gap-2">
               {COLUMNS.map(column => {
-                const isCurrent = (moveProject.plazo || '') === column.id;
+                const isCurrent = getProjectSection(moveProject) === column.id;
 
                 return (
                   <button
