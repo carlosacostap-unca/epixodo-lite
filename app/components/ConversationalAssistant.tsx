@@ -12,6 +12,7 @@ type Message = {
 type ConversationResponse = {
   reply?: string;
   suggestions?: string[];
+  pendingAction?: PendingAction | null;
 };
 
 type TranscriptionResponse = {
@@ -19,8 +20,14 @@ type TranscriptionResponse = {
   error?: string;
 };
 
+type PendingAction = {
+  action: 'delete_task';
+  taskId: string;
+  taskTitle: string;
+};
+
 const AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
-const defaultSuggestions = ['Crear tarea', 'Que tengo para hoy?', 'Mostrar Inbox', 'Listar proyectos'];
+const defaultSuggestions = ['Crear tarea para mañana', 'Que tengo para hoy?', 'Tareas vencidas', 'Mostrar Inbox'];
 
 function getSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
@@ -53,6 +60,7 @@ export default function ConversationalAssistant() {
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('');
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -89,7 +97,7 @@ export default function ConversationalAssistant() {
       const response = await fetch('/api/conversation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, pendingAction }),
       });
       const data = (await response.json()) as ConversationResponse;
       const reply = data.reply || 'No pude procesar el mensaje.';
@@ -100,6 +108,7 @@ export default function ConversationalAssistant() {
 
       setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: reply }]);
       setSuggestions(data.suggestions?.length ? data.suggestions : defaultSuggestions);
+      setPendingAction(data.pendingAction || null);
       router.refresh();
     } catch (error) {
       setMessages((current) => [

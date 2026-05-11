@@ -61,6 +61,63 @@ test('answers today task questions from conversational mode', async ({ page, req
   await expect(page.getByText('Conversar sobre lo de hoy')).toBeVisible();
 });
 
+test('updates task metadata from conversational mode', async ({ page, request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Ordenar facturas',
+        description: '',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('cambia plazo de Ordenar facturas a Corto');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+
+  await expect(page.getByText(/plazo Corto/i)).toBeVisible();
+
+  await page.goto('/?view=inbox');
+  await expect(page.getByText('Ordenar facturas')).toBeVisible();
+  await expect(page.getByText('Plazo: Corto')).toBeVisible();
+});
+
+test('confirms before deleting a task from conversational mode', async ({ page, request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Eliminar prueba conversacional',
+        description: '',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('borra tarea Eliminar prueba conversacional');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+
+  await expect(page.getByText(/necesito confirmacion/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Confirmar borrado' }).click();
+  await expect(page.getByText(/borre "Eliminar prueba conversacional"/i)).toBeVisible();
+
+  await page.goto('/?view=inbox');
+  await expect(page.getByText('Eliminar prueba conversacional')).toHaveCount(0);
+});
+
 test('filters projects and opens a fixture project detail', async ({ page }) => {
   await page.goto('/?view=projects');
 
