@@ -12,6 +12,11 @@ type TranscriptionResponse = {
 
 type QuickTaskResponse = {
   error?: string;
+  task?: {
+    title: string;
+  };
+  assignedProjectTitle?: string | null;
+  isUnassigned?: boolean;
 };
 
 const AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -34,6 +39,7 @@ export default function QuickVoiceTaskCapture() {
   const [state, setState] = useState<QuickCaptureState>('idle');
   const [error, setError] = useState('');
   const [lastTaskTitle, setLastTaskTitle] = useState('');
+  const [lastTaskPlacement, setLastTaskPlacement] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -76,7 +82,7 @@ export default function QuickVoiceTaskCapture() {
 
       const transcript = data.transcript?.trim();
       if (!transcript) {
-        throw new Error('La transcripción quedó vacía.');
+        throw new Error('La transcripcion quedo vacia.');
       }
 
       setState('saving');
@@ -88,10 +94,11 @@ export default function QuickVoiceTaskCapture() {
       const saveData = (await saveResponse.json()) as QuickTaskResponse;
 
       if (!saveResponse.ok) {
-        throw new Error(saveData.error || 'No se pudo guardar la tarea en Tareas.');
+        throw new Error(saveData.error || 'No se pudo guardar la tarea.');
       }
 
-      setLastTaskTitle(transcript);
+      setLastTaskTitle(saveData.task?.title || transcript);
+      setLastTaskPlacement(saveData.assignedProjectTitle ? `Asignada a ${saveData.assignedProjectTitle}` : 'Sin proyecto');
       setState('success');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'No se pudo crear la tarea.');
@@ -101,13 +108,14 @@ export default function QuickVoiceTaskCapture() {
 
   const startRecording = async () => {
     if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || !('MediaRecorder' in window)) {
-      setError('La grabación de audio no está disponible en este navegador.');
+      setError('La grabacion de audio no esta disponible en este navegador.');
       setState('error');
       return;
     }
 
     setError('');
     setLastTaskTitle('');
+    setLastTaskPlacement('');
     audioChunksRef.current = [];
 
     try {
@@ -125,7 +133,7 @@ export default function QuickVoiceTaskCapture() {
       };
 
       recorder.onerror = () => {
-        setError('No se pudo grabar el audio. Inténtalo de nuevo.');
+        setError('No se pudo grabar el audio. Intentalo de nuevo.');
         setState('error');
         stopStream();
       };
@@ -136,7 +144,7 @@ export default function QuickVoiceTaskCapture() {
         const recordingMimeType = recorder.mimeType || mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: recordingMimeType });
         if (audioBlob.size === 0) {
-          setError('No se recibió audio para transcribir.');
+          setError('No se recibio audio para transcribir.');
           setState('error');
           return;
         }
@@ -148,7 +156,7 @@ export default function QuickVoiceTaskCapture() {
       setState('recording');
     } catch (error) {
       console.error('Microphone access error:', error);
-      setError('No se pudo acceder al micrófono. Revisa los permisos del navegador.');
+      setError('No se pudo acceder al microfono. Revisa los permisos del navegador.');
       setState('error');
       stopStream();
     }
@@ -179,7 +187,7 @@ export default function QuickVoiceTaskCapture() {
   return (
     <main className="min-h-dvh bg-gray-950 text-white flex flex-col px-4 py-3 overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-3 text-sm">
-        <p className="font-semibold tracking-wide">Captura rápida</p>
+        <p className="font-semibold tracking-wide">Captura rapida</p>
         <Link href="/" className="rounded-full border border-white/20 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white">
           Inicio
         </Link>
@@ -193,7 +201,7 @@ export default function QuickVoiceTaskCapture() {
           {state === 'success' && lastTaskTitle ? (
             <p className="mt-2 text-lg font-semibold leading-tight break-words">{lastTaskTitle}</p>
           ) : (
-            <h1 className="mt-2 text-2xl font-bold leading-tight">Decí tu tarea</h1>
+            <h1 className="mt-2 text-2xl font-bold leading-tight">Deci tu tarea</h1>
           )}
         </div>
 
@@ -208,12 +216,12 @@ export default function QuickVoiceTaskCapture() {
 
         <div className="min-h-14 max-w-72">
           {!isSupported ? (
-            <p className="text-sm font-medium text-amber-200">La grabación no está disponible en este navegador.</p>
+            <p className="text-sm font-medium text-amber-200">La grabacion no esta disponible en este navegador.</p>
           ) : null}
-          {state === 'recording' ? <p className="text-sm text-white/70">Tocá detener cuando termines.</p> : null}
+          {state === 'recording' ? <p className="text-sm text-white/70">Toca detener cuando termines.</p> : null}
           {state === 'transcribing' ? <p className="text-sm text-white/70">Procesando el audio con OpenAI.</p> : null}
-          {state === 'saving' ? <p className="text-sm text-white/70">Añadiendo la tarjeta a Tareas.</p> : null}
-          {state === 'success' ? <p className="text-sm text-green-200">Podés grabar otra tarea.</p> : null}
+          {state === 'saving' ? <p className="text-sm text-white/70">Analizando y guardando la tarea.</p> : null}
+          {state === 'success' ? <p className="text-sm text-green-200">{lastTaskPlacement || 'Podes grabar otra tarea.'}</p> : null}
           {state === 'error' && error ? (
             <p role="alert" className="text-sm font-medium text-red-200">
               {error}

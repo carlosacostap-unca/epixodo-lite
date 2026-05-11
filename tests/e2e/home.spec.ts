@@ -41,7 +41,7 @@ test('creates a project against mutable e2e fixtures', async ({ page }) => {
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Proyecto creado en E2E');
   await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion con fixtures mutables');
   await page.getByRole('combobox').selectOption('Largo');
-  await page.getByRole('button', { name: 'Crear' }).click();
+  await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Proyecto creado en E2E' })).toBeVisible();
   await page.reload();
@@ -54,7 +54,7 @@ test('creates a project in the Tareas board section', async ({ page }) => {
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Trabajo suelto en E2E');
   await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion de la seccion Tareas');
   await page.getByRole('combobox').selectOption('Tareas');
-  await page.getByRole('button', { name: 'Crear' }).click();
+  await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
   const tasksSection = page
     .locator('div')
@@ -65,7 +65,7 @@ test('creates a project in the Tareas board section', async ({ page }) => {
   await expect(tasksSection.getByRole('heading', { name: 'Trabajo suelto en E2E' })).toBeVisible();
 });
 
-test('creates a task card in Tareas from voice dictation', async ({ page }) => {
+test('creates an unassigned task from home voice dictation', async ({ page }) => {
   await page.addInitScript(() => {
     class MockMediaRecorder {
       static isTypeSupported() {
@@ -111,18 +111,16 @@ test('creates a task card in Tareas from voice dictation', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Grabar tarea' }).click();
   await expect(page.getByRole('status')).toHaveText('Grabando...');
-  await page.getByRole('button', { name: 'Detener grabación' }).click();
+  await page.getByRole('button', { name: /Detener grabaci/ }).click();
   await expect(page.getByRole('textbox', { name: 'Texto dictado' })).toHaveValue('Llamar al proveedor');
-  await page.getByRole('button', { name: 'Guardar en Tareas' }).click();
+  await page.getByRole('button', { name: 'Crear tarea' }).click();
 
-  await expect(
-    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toBeVisible();
+  await expect(page.getByText('Llamar al proveedor')).toBeVisible();
 
   await page.reload();
-  await expect(
-    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toBeVisible();
+  await expect(page.getByText('Llamar al proveedor')).toBeVisible();
 });
 
 test('moves a project from the touch long-press selector', async ({ page }) => {
@@ -184,7 +182,7 @@ test('edits and deletes a project against mutable e2e fixtures', async ({ page }
   await page.getByRole('button', { name: 'Guardar Cambios' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Proyecto editado en E2E' })).toBeVisible();
-  await expect(page.getByText('Sección: Largo')).toBeVisible();
+  await expect(page.getByText(/Secci.n: Largo/)).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Proyecto editado en E2E' })).toBeVisible();

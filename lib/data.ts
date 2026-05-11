@@ -2,9 +2,13 @@ import { pb } from '@/lib/pocketbase';
 import type { Project, Task } from '@/types';
 import {
   getE2EProject,
+  getOrCreateE2EUnassignedProject,
   listE2EProjects,
+  listE2EUnassignedTasks,
   listE2ETasks,
 } from '@/lib/e2eStore';
+import { findUnassignedTasksProject } from '@/lib/unassignedTaskStore';
+import { isUnassignedTasksProject } from '@/lib/unassignedTasks';
 import type { RecordFullListOptions } from 'pocketbase';
 
 type ProjectPlazo = Project['plazo'];
@@ -12,7 +16,7 @@ type ProjectCreateInput = Pick<Project, 'title' | 'description' | 'plazo'>;
 type ProjectUpdateInput = Partial<ProjectCreateInput> & Pick<Project, 'id'>;
 type ProjectOrderInput = Pick<Project, 'id' | 'order'> & { plazo: ProjectPlazo };
 type TaskCreateInput = Pick<Task, 'title' | 'is_completed' | 'project'>;
-type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed'>> & Pick<Task, 'id'>;
+type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed' | 'project'>> & Pick<Task, 'id'>;
 
 const useE2EFixtures = process.env.NEXT_PUBLIC_E2E_MOCKS === '1';
 
@@ -41,6 +45,7 @@ async function postE2EAction(action: string, payload = {}) {
 export async function getProjects(query = '') {
   if (useE2EFixtures) {
     return listE2EProjects()
+      .filter((project) => !isUnassignedTasksProject(project))
       .filter((project) => {
         if (!query) return true;
         return textMatches(project.title, query) || textMatches(project.description, query);
@@ -54,7 +59,8 @@ export async function getProjects(query = '') {
     options.filter = `title ~ "${query}" || description ~ "${query}"`;
   }
 
-  return pb.collection('projects').getFullList<Project>(options);
+  const projects = await pb.collection('projects').getFullList<Project>(options);
+  return projects.filter((project) => !isUnassignedTasksProject(project));
 }
 
 export async function getProject(projectId: string) {
@@ -129,6 +135,30 @@ export async function getTasks(projectId: string, query = '') {
   });
 }
 
+export async function getUnassignedTasks(query = '') {
+  if (useE2EFixtures) {
+    getOrCreateE2EUnassignedProject();
+    return listE2EUnassignedTasks()
+      .filter((task) => !query || textMatches(task.title, query))
+      .sort((a, b) => a.created.localeCompare(b.created));
+  }
+
+  const project = await findUnassignedTasksProject();
+  if (!project) {
+    return [];
+  }
+
+  let filter = `project = "${project.id}"`;
+  if (query) {
+    filter += ` && title ~ "${query}"`;
+  }
+
+  return pb.collection('tasks').getFullList<Task>({
+    filter,
+    sort: 'created',
+  });
+}
+
 export async function createTask(task: TaskCreateInput) {
   if (useE2EFixtures) {
     await postE2EAction('createTask', { task });
@@ -146,6 +176,10 @@ export async function updateTask(task: TaskUpdateInput) {
 
   const { id, ...data } = task;
   await pb.collection('tasks').update(id, data);
+}
+
+export async function assignTaskToProject(taskId: string, projectId: string) {
+  return updateTask({ id: taskId, project: projectId });
 }
 
 export async function deleteTask(taskId: string) {

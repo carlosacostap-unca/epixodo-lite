@@ -2,11 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createProject } from '@/lib/data';
 
 type TranscriptionResponse = {
   transcript?: string;
   error?: string;
+};
+
+type QuickTaskResponse = {
+  error?: string;
+  task?: {
+    title: string;
+  };
+  assignedProjectTitle?: string | null;
+  isUnassigned?: boolean;
 };
 
 const AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -31,6 +39,7 @@ export default function VoiceTaskCapture() {
   const [isSaving, setIsSaving] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -57,6 +66,7 @@ export default function VoiceTaskCapture() {
   const transcribeAudio = async (audioBlob: Blob, mimeType: string) => {
     setIsTranscribing(true);
     setError('');
+    setSuccess('');
 
     try {
       const formData = new FormData();
@@ -74,7 +84,7 @@ export default function VoiceTaskCapture() {
 
       const nextTranscript = data.transcript?.trim();
       if (!nextTranscript) {
-        throw new Error('La transcripción quedó vacía.');
+        throw new Error('La transcripcion quedo vacia.');
       }
 
       setTranscript(nextTranscript);
@@ -88,11 +98,12 @@ export default function VoiceTaskCapture() {
 
   const startRecording = async () => {
     if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || !('MediaRecorder' in window)) {
-      setError('La grabación de audio no está disponible en este navegador.');
+      setError('La grabacion de audio no esta disponible en este navegador.');
       return;
     }
 
     setError('');
+    setSuccess('');
     setTranscript('');
     audioChunksRef.current = [];
 
@@ -111,7 +122,7 @@ export default function VoiceTaskCapture() {
       };
 
       recorder.onerror = () => {
-        setError('No se pudo grabar el audio. Inténtalo de nuevo.');
+        setError('No se pudo grabar el audio. Intentalo de nuevo.');
         setIsRecording(false);
         stopStream();
       };
@@ -123,7 +134,7 @@ export default function VoiceTaskCapture() {
         const recordingMimeType = recorder.mimeType || mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: recordingMimeType });
         if (audioBlob.size === 0) {
-          setError('No se recibió audio para transcribir.');
+          setError('No se recibio audio para transcribir.');
           return;
         }
 
@@ -134,7 +145,7 @@ export default function VoiceTaskCapture() {
       setIsRecording(true);
     } catch (error) {
       console.error('Microphone access error:', error);
-      setError('No se pudo acceder al micrófono. Revisa los permisos del navegador.');
+      setError('No se pudo acceder al microfono. Revisa los permisos del navegador.');
       stopStream();
     }
   };
@@ -155,17 +166,25 @@ export default function VoiceTaskCapture() {
 
     setIsSaving(true);
     setError('');
+    setSuccess('');
     try {
-      await createProject({
-        title,
-        description: 'Creada por dictado de voz con OpenAI.',
-        plazo: 'Tareas',
+      const response = await fetch('/api/quick-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
       });
+      const data = (await response.json()) as QuickTaskResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo guardar la tarea.');
+      }
+
       setTranscript('');
+      setSuccess(data.assignedProjectTitle ? `Tarea asignada a ${data.assignedProjectTitle}.` : 'Tarea creada sin proyecto.');
       router.refresh();
     } catch (error) {
       console.error('Error creating voice task:', error);
-      setError('No se pudo guardar la tarea dictada. Inténtalo de nuevo.');
+      setError(error instanceof Error ? error.message : 'No se pudo guardar la tarea dictada. Intentalo de nuevo.');
     } finally {
       setIsSaving(false);
     }
@@ -187,10 +206,11 @@ export default function VoiceTaskCapture() {
             onChange={(event) => {
               setTranscript(event.target.value);
               if (error) setError('');
+              if (success) setSuccess('');
             }}
-            placeholder="Graba una tarea para enviarla a Tareas"
+            placeholder="Graba una tarea para crearla con IA"
             aria-label="Texto dictado"
-            aria-describedby={error ? 'voice-task-error' : 'voice-task-status'}
+            aria-describedby={error ? 'voice-task-error' : success ? 'voice-task-success' : 'voice-task-status'}
             className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             disabled={isRecording || isTranscribing || isSaving}
           />
@@ -202,7 +222,7 @@ export default function VoiceTaskCapture() {
             disabled={!isSupported || isTranscribing || isSaving}
             className="bg-gray-900 text-white px-5 py-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 transition shadow-sm font-medium whitespace-nowrap dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
           >
-            {isRecording ? 'Detener grabación' : 'Grabar tarea'}
+            {isRecording ? 'Detener grabacion' : 'Grabar tarea'}
           </button>
           <button
             type="button"
@@ -210,13 +230,13 @@ export default function VoiceTaskCapture() {
             disabled={isBusy || !transcript.trim()}
             className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-sm font-medium whitespace-nowrap"
           >
-            {isSaving ? 'Guardando...' : 'Guardar en Tareas'}
+            {isSaving ? 'Guardando...' : 'Crear tarea'}
           </button>
         </div>
       </div>
       {!isSupported ? (
         <p className="mt-3 text-sm font-medium text-gray-500 dark:text-gray-400">
-          La grabación de audio no está disponible en este navegador.
+          La grabacion de audio no esta disponible en este navegador.
         </p>
       ) : null}
       {isRecording || isTranscribing ? (
@@ -227,6 +247,11 @@ export default function VoiceTaskCapture() {
       {error ? (
         <p id="voice-task-error" role="alert" className="mt-3 text-sm font-medium text-red-600 dark:text-red-400">
           {error}
+        </p>
+      ) : null}
+      {success ? (
+        <p id="voice-task-success" role="status" className="mt-3 text-sm font-medium text-green-700 dark:text-green-300">
+          {success}
         </p>
       ) : null}
     </section>

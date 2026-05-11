@@ -1,12 +1,19 @@
 import type { Project, Task } from '@/types';
 import { e2eProjects, e2eTasks } from '@/lib/e2eFixtures';
+import {
+  isUnassignedTasksProject,
+  UNASSIGNED_TASKS_PROJECT_DESCRIPTION,
+  UNASSIGNED_TASKS_PROJECT_TITLE,
+} from '@/lib/unassignedTasks';
 
 type ProjectPlazo = Project['plazo'];
 type ProjectCreateInput = Pick<Project, 'title' | 'description' | 'plazo'>;
 type ProjectUpdateInput = Partial<ProjectCreateInput> & Pick<Project, 'id'>;
 type ProjectOrderInput = Pick<Project, 'id' | 'order'> & { plazo: ProjectPlazo };
 type TaskCreateInput = Pick<Task, 'title' | 'is_completed' | 'project'>;
-type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed'>> & Pick<Task, 'id'>;
+type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed' | 'project'>> & Pick<Task, 'id'>;
+
+const UNASSIGNED_E2E_PROJECT_ID = 'e2e-project-unassigned-tasks';
 
 type E2EStore = {
   nextProjectId: number;
@@ -49,6 +56,26 @@ export function resetE2EStore() {
 
 export function listE2EProjects() {
   return getStore().projects.map(cloneProject);
+}
+
+export function getOrCreateE2EUnassignedProject() {
+  const store = getStore();
+  const existing = store.projects.find((project) => project.id === UNASSIGNED_E2E_PROJECT_ID || isUnassignedTasksProject(project));
+  if (existing) return cloneProject(existing);
+
+  const timestamp = now();
+  const project: Project = {
+    id: UNASSIGNED_E2E_PROJECT_ID,
+    title: UNASSIGNED_TASKS_PROJECT_TITLE,
+    description: UNASSIGNED_TASKS_PROJECT_DESCRIPTION,
+    plazo: '',
+    order: 999,
+    created: timestamp,
+    updated: timestamp,
+  };
+
+  store.projects.push(project);
+  return cloneProject(project);
 }
 
 export function getE2EProject(projectId: string) {
@@ -111,6 +138,14 @@ export function updateE2EProjectOrder(projects: ProjectOrderInput[]) {
 
 export function listE2ETasks() {
   return getStore().tasks.map(cloneTask);
+}
+
+export function listE2EUnassignedTasks() {
+  const unassignedProject = getOrCreateE2EUnassignedProject();
+
+  return getStore()
+    .tasks.filter((task) => task.project === unassignedProject.id)
+    .map(cloneTask);
 }
 
 export function createE2ETask(task: TaskCreateInput) {

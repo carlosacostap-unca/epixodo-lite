@@ -1,9 +1,10 @@
-import { getProjects } from '@/lib/data';
-import { Project } from '@/types';
+import { getProjects, getUnassignedTasks } from '@/lib/data';
+import type { Project, Task } from '@/types';
 import CreateProject from './components/CreateProject';
 import ProjectSearch from './components/ProjectSearch';
 import ProjectBoard from './components/ProjectBoard';
 import VoiceTaskCapture from './components/VoiceTaskCapture';
+import UnassignedTasks from './components/UnassignedTasks';
 
 export const revalidate = 0; 
 
@@ -12,8 +13,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const q = resolvedParams.q || '';
 
   let projects: Project[] = [];
+  let unassignedTasks: Task[] = [];
   try {
-    projects = await getProjects(q);
+    [projects, unassignedTasks] = await Promise.all([getProjects(q), getUnassignedTasks(q)]);
   } catch (error) {
     console.error("Error al obtener proyectos:", error);
   }
@@ -38,6 +40,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <CreateProject />
         <VoiceTaskCapture />
       </div>
+
+      <UnassignedTasks initialTasks={unassignedTasks} projects={projects} />
 
       {q && projects.length === 0 ? (
         <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700">
