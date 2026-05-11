@@ -43,6 +43,10 @@ End-to-end tests live in `tests/e2e/`. Install browsers with `npm run test:e2e:i
 
 The E2E server runs with mutable local fixtures from `lib/e2eFixtures.ts` instead of calling PocketBase, so browser tests are stable without external data or network access. Each test resets the in-memory fixture store through the internal `/api/e2e` route.
 
+## Voice dictation
+
+Voice task capture uses the OpenAI Audio Transcriptions API from a Next.js route handler. Set `OPENAI_API_KEY` in the server environment before using dictation outside E2E tests.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

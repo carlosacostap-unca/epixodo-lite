@@ -67,42 +67,51 @@ test('creates a project in the Tareas board section', async ({ page }) => {
 
 test('creates a task card in Tareas from voice dictation', async ({ page }) => {
   await page.addInitScript(() => {
-    class MockSpeechRecognition {
-      continuous = false;
-      interimResults = false;
-      lang = '';
-      onend: ((event: Event) => void) | null = null;
-      onerror: ((event: Event) => void) | null = null;
-      onresult: ((event: Event) => void) | null = null;
+    class MockMediaRecorder {
+      static isTypeSupported() {
+        return true;
+      }
 
-      abort() {}
+      mimeType = 'audio/webm';
+      ondataavailable: ((event: BlobEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      onstop: ((event: Event) => void) | null = null;
+      state: RecordingState = 'inactive';
 
       start() {
-        window.setTimeout(() => {
-          this.onresult?.({
-            resultIndex: 0,
-            results: [
-              {
-                0: { transcript: 'Llamar al proveedor' },
-                isFinal: true,
-              },
-            ],
-          } as unknown as Event);
-          this.onend?.(new Event('end'));
-        }, 10);
+        this.state = 'recording';
       }
 
       stop() {
-        this.onend?.(new Event('end'));
+        if (this.state === 'inactive') return;
+
+        this.state = 'inactive';
+        this.ondataavailable?.({
+          data: new Blob(['audio'], { type: 'audio/webm' }),
+        } as BlobEvent);
+        this.onstop?.(new Event('stop'));
       }
     }
 
-    window.SpeechRecognition = MockSpeechRecognition as never;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({
+          getTracks: () => [{ stop() {} }],
+        }),
+      },
+    });
+    Object.defineProperty(window, 'MediaRecorder', {
+      configurable: true,
+      value: MockMediaRecorder,
+    });
   });
 
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Dictar tarea' }).click();
+  await page.getByRole('button', { name: 'Grabar tarea' }).click();
+  await expect(page.getByRole('status')).toHaveText('Grabando...');
+  await page.getByRole('button', { name: 'Detener grabación' }).click();
   await expect(page.getByRole('textbox', { name: 'Texto dictado' })).toHaveValue('Llamar al proveedor');
   await page.getByRole('button', { name: 'Guardar en Tareas' }).click();
 

@@ -1,109 +1,155 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProject } from '@/lib/data';
 
-type BrowserSpeechRecognitionEvent = Event & {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: {
-      isFinal: boolean;
-      0: { transcript: string };
-    };
-  };
-};
-
-type BrowserSpeechRecognitionErrorEvent = Event & {
+type TranscriptionResponse = {
+  transcript?: string;
   error?: string;
 };
 
-type BrowserSpeechRecognition = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onend: ((event: Event) => void) | null;
-  onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null;
-  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
-  abort: () => void;
-  start: () => void;
-  stop: () => void;
-};
+const AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
 
-type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
-
-declare global {
-  interface Window {
-    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+function getSupportedAudioMimeType() {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
+    return '';
   }
+
+  return AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || '';
+}
+
+function getAudioFileName(mimeType: string) {
+  if (mimeType.includes('mp4')) return 'voice-task.mp4';
+  return 'voice-task.webm';
 }
 
 export default function VoiceTaskCapture() {
   const [isSupported, setIsSupported] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState('');
-  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    setIsSupported(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
-
-    return () => {
-      recognitionRef.current?.abort();
-    };
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
   }, []);
 
-  const stopListening = () => {
-    recognitionRef.current?.stop();
-    setIsListening(false);
+  useEffect(() => {
+    setIsSupported(typeof navigator.mediaDevices?.getUserMedia === 'function' && 'MediaRecorder' in window);
+
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder?.state === 'recording') {
+        recorder.onstop = null;
+        recorder.stop();
+      }
+      stopStream();
+    };
+  }, [stopStream]);
+
+  const transcribeAudio = async (audioBlob: Blob, mimeType: string) => {
+    setIsTranscribing(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, getAudioFileName(mimeType));
+
+      const response = await fetch('/api/voice-task/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = (await response.json()) as TranscriptionResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo transcribir el audio.');
+      }
+
+      const nextTranscript = data.transcript?.trim();
+      if (!nextTranscript) {
+        throw new Error('La transcripción quedó vacía.');
+      }
+
+      setTranscript(nextTranscript);
+    } catch (error) {
+      console.error('Voice transcription error:', error);
+      setError(error instanceof Error ? error.message : 'No se pudo transcribir el audio.');
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError('El dictado por voz no está disponible en este navegador.');
+  const startRecording = async () => {
+    if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || !('MediaRecorder' in window)) {
+      setError('La grabación de audio no está disponible en este navegador.');
       return;
     }
 
     setError('');
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'es-AR';
-    recognition.continuous = false;
-    recognition.interimResults = true;
+    setTranscript('');
+    audioChunksRef.current = [];
 
-    recognition.onresult = (event) => {
-      let nextTranscript = '';
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        nextTranscript += event.results[index][0].transcript;
-      }
+      streamRef.current = stream;
+      mediaRecorderRef.current = recorder;
 
-      setTranscript(nextTranscript.trim());
-    };
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
 
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setError('No se pudo tomar el dictado. Inténtalo de nuevo.');
-      setIsListening(false);
-    };
+      recorder.onerror = () => {
+        setError('No se pudo grabar el audio. Inténtalo de nuevo.');
+        setIsRecording(false);
+        stopStream();
+      };
 
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+      recorder.onstop = () => {
+        setIsRecording(false);
+        stopStream();
 
-    recognitionRef.current = recognition;
-    setIsListening(true);
-    recognition.start();
+        const recordingMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: recordingMimeType });
+        if (audioBlob.size === 0) {
+          setError('No se recibió audio para transcribir.');
+          return;
+        }
+
+        void transcribeAudio(audioBlob, recordingMimeType);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Microphone access error:', error);
+      setError('No se pudo acceder al micrófono. Revisa los permisos del navegador.');
+      stopStream();
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === 'recording') {
+      recorder.stop();
+    }
   };
 
   const handleSave = async () => {
     const title = transcript.trim();
     if (!title) {
-      setError('Dicta o escribe una tarea antes de guardarla.');
+      setError('Graba o escribe una tarea antes de guardarla.');
       return;
     }
 
@@ -112,7 +158,7 @@ export default function VoiceTaskCapture() {
     try {
       await createProject({
         title,
-        description: 'Creada por dictado de voz.',
+        description: 'Creada por dictado de voz con OpenAI.',
         plazo: 'Tareas',
       });
       setTranscript('');
@@ -124,6 +170,8 @@ export default function VoiceTaskCapture() {
       setIsSaving(false);
     }
   };
+
+  const isBusy = isRecording || isTranscribing || isSaving;
 
   return (
     <section className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -140,26 +188,26 @@ export default function VoiceTaskCapture() {
               setTranscript(event.target.value);
               if (error) setError('');
             }}
-            placeholder="Dicta una tarea para enviarla a Tareas"
+            placeholder="Graba una tarea para enviarla a Tareas"
             aria-label="Texto dictado"
-            aria-describedby={error ? 'voice-task-error' : undefined}
+            aria-describedby={error ? 'voice-task-error' : 'voice-task-status'}
             className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-            disabled={isSaving}
+            disabled={isRecording || isTranscribing || isSaving}
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             type="button"
-            onClick={isListening ? stopListening : startListening}
-            disabled={!isSupported || isSaving}
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={!isSupported || isTranscribing || isSaving}
             className="bg-gray-900 text-white px-5 py-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 transition shadow-sm font-medium whitespace-nowrap dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
           >
-            {isListening ? 'Detener dictado' : 'Dictar tarea'}
+            {isRecording ? 'Detener grabación' : 'Grabar tarea'}
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || !transcript.trim()}
+            disabled={isBusy || !transcript.trim()}
             className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-sm font-medium whitespace-nowrap"
           >
             {isSaving ? 'Guardando...' : 'Guardar en Tareas'}
@@ -168,7 +216,12 @@ export default function VoiceTaskCapture() {
       </div>
       {!isSupported ? (
         <p className="mt-3 text-sm font-medium text-gray-500 dark:text-gray-400">
-          El dictado por voz no está disponible en este navegador.
+          La grabación de audio no está disponible en este navegador.
+        </p>
+      ) : null}
+      {isRecording || isTranscribing ? (
+        <p id="voice-task-status" role="status" className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400">
+          {isRecording ? 'Grabando...' : 'Transcribiendo con OpenAI...'}
         </p>
       ) : null}
       {error ? (
