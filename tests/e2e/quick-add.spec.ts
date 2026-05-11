@@ -66,18 +66,17 @@ test('leaves a low-confidence quick voice task unassigned', async ({ page }) => 
   await expect(page.getByRole('link', { name: 'Inicio' })).toBeVisible();
   await recordQuickTask(page);
   await expect(page.getByText('Llamar al proveedor')).toBeVisible();
-  await expect(page.getByText('Sin proyecto')).toBeVisible();
+  await expect(page.getByText('Quedo en Inbox')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Grabar tarea' })).toBeEnabled();
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  const hasVerticalOverflow = await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight);
   expect(hasHorizontalOverflow).toBe(false);
+  expect(hasVerticalOverflow).toBe(false);
 
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toBeVisible();
+  await page.goto('/?view=inbox');
+  await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
   await expect(page.getByText('Llamar al proveedor')).toBeVisible();
-  await expect(
-    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
-  ).toHaveCount(0);
 });
 
 test('assigns a high-confidence quick voice task to an existing project', async ({ page }) => {
@@ -108,11 +107,11 @@ test('assigns an unassigned quick voice task manually', async ({ page }) => {
   await page.goto('/quick-add');
   await recordQuickTask(page);
 
-  await page.goto('/');
+  await page.goto('/?view=inbox');
   await page.getByRole('combobox', { name: 'Proyecto para Llamar al proveedor' }).selectOption('e2e-project-launch');
   await page.getByRole('button', { name: 'Asignar' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toHaveCount(0);
+  await expect(page.getByText('Llamar al proveedor')).toHaveCount(0);
 
   await page.goto('/projects/e2e-project-launch');
   await expect(page.getByText('Llamar al proveedor')).toBeVisible();
@@ -174,7 +173,7 @@ test('shows quick voice fallback cards in Tareas when stored without plazo', asy
     },
   });
 
-  await page.goto('/');
+  await page.goto('/?view=projects');
 
   await expect(
     page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Fallback sin plazo' }),

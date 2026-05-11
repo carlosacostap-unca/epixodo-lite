@@ -134,6 +134,18 @@ export async function getTasks(projectId: string, query = '') {
   });
 }
 
+export async function getAllTasks() {
+  if (useE2EFixtures) {
+    return listE2ETasks()
+      .map((task) => ({ ...task }))
+      .sort((a, b) => a.created.localeCompare(b.created));
+  }
+
+  return pb.collection('tasks').getFullList<Task>({
+    sort: 'due_at,realization_at,created',
+  });
+}
+
 export async function getUnassignedTasks(query = '') {
   if (useE2EFixtures) {
     return listE2EUnassignedTasks()

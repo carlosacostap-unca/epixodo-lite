@@ -1,32 +1,49 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function ProjectSearch() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState(searchParams.get('q') || '');
+  const currentQuery = searchParams.get('q') || '';
+  const currentParams = searchParams.toString();
+  const [query, setQuery] = useState(currentQuery);
+
+  useEffect(() => {
+    setQuery(currentQuery);
+  }, [currentQuery]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
+      const params = new URLSearchParams(currentParams);
+      params.set('view', 'projects');
+
       if (query) {
-        router.push(`/?q=${encodeURIComponent(query)}`);
+        params.set('q', query);
       } else {
-        router.push(`/`);
+        params.delete('q');
       }
+
+      if (params.get('q') === currentQuery && params.get('view') === 'projects') {
+        return;
+      }
+
+      router.push(`/?${params.toString()}`);
     }, 300);
+
     return () => clearTimeout(delayDebounceFn);
-  }, [query, router]);
+  }, [currentParams, currentQuery, query, router]);
 
   return (
-    <div className="mb-6">
+    <div>
       <input
         type="text"
-        placeholder="Buscar proyectos por título o descripción..."
+        placeholder="Buscar proyectos por titulo o descripcion..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="w-full p-3 border rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+        aria-label="Buscar proyectos"
+        className="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
       />
     </div>
   );

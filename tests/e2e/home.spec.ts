@@ -10,24 +10,26 @@ test('loads the project board home page from e2e fixtures', async ({ page }) => 
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Epixodo Lite/);
-  await expect(page.getByRole('heading', { level: 1, name: /Proyectos/i })).toBeVisible();
-  await expect(page.getByPlaceholder(/Buscar proyectos/i)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Lanzamiento del producto' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Tareas', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Bandeja de tareas' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Workspace' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Hoy/ }).first()).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: /Inbox/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Proyectos/ }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sin fecha' })).toBeVisible();
+  await expect(page.getByText('Preparar notas de lanzamiento')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Grabar tarea' })).toBeVisible();
 });
 
 test('filters projects and opens a fixture project detail', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=projects');
 
   await page.getByPlaceholder(/Buscar proyectos/i).fill('usuarios');
   await expect(page).toHaveURL(/q=usuarios/);
   await expect(page.getByRole('heading', { name: 'Investigacion de usuarios' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lanzamiento del producto' })).toHaveCount(0);
 
-  await page.goto('/');
+  await page.goto('/?view=projects');
   await page.waitForTimeout(400);
-  await page.locator('a[href="/projects/e2e-project-launch"]').click();
+  await page.getByRole('link', { name: 'Lanzamiento del producto' }).click();
 
   await expect(page).toHaveURL(/\/projects\/e2e-project-launch/);
   await expect(page.getByRole('heading', { level: 1, name: 'Lanzamiento del producto' })).toBeVisible();
@@ -36,7 +38,7 @@ test('filters projects and opens a fixture project detail', async ({ page }) => 
 });
 
 test('creates a project against mutable e2e fixtures', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=projects');
 
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Proyecto creado en E2E');
   await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion con fixtures mutables');
@@ -49,7 +51,7 @@ test('creates a project against mutable e2e fixtures', async ({ page }) => {
 });
 
 test('creates a project in the Tareas board section', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=projects');
 
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Trabajo suelto en E2E');
   await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion de la seccion Tareas');
@@ -115,16 +117,16 @@ test('creates an unassigned task from home voice dictation', async ({ page }) =>
   await expect(page.getByRole('textbox', { name: 'Texto dictado' })).toHaveValue('Llamar al proveedor');
   await page.getByRole('button', { name: 'Crear tarea' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sin fecha' })).toBeVisible();
   await expect(page.getByText('Llamar al proveedor')).toBeVisible();
 
-  await page.reload();
-  await expect(page.getByRole('heading', { name: 'Tareas sin asignar' })).toBeVisible();
+  await page.getByRole('link', { name: /Inbox/ }).first().click();
+  await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
   await expect(page.getByText('Llamar al proveedor')).toBeVisible();
 });
 
 test('moves a project from the touch long-press selector', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=projects');
 
   const projectCard = page.getByTestId('project-card-e2e-project-launch');
   await projectCard.dispatchEvent('pointerdown', {
@@ -155,6 +157,65 @@ test('moves a project from the touch long-press selector', async ({ page }) => {
   await expect(
     page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Lanzamiento del producto' }),
   ).toBeVisible();
+});
+
+test('uses a mobile project list instead of the desktop board', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.getByRole('link', { name: /Proyectos/ }).first().click();
+  await expect(page.getByTestId('project-list-card-e2e-project-launch')).toBeVisible();
+  await expect(page.getByTestId('project-card-e2e-project-launch')).toBeHidden();
+});
+
+test('assigns an inbox task and removes it from Inbox', async ({ page, request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Ordenar tarea del inbox',
+        description: 'Debe pasar a un proyecto existente',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+
+  await page.goto('/?view=inbox');
+  await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
+  await expect(page.getByText('Ordenar tarea del inbox')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Proyecto para Ordenar tarea del inbox' }).selectOption('e2e-project-launch');
+  await page.getByRole('button', { name: 'Asignar' }).click();
+  await expect(page.getByText('Ordenar tarea del inbox')).toHaveCount(0);
+
+  await page.goto('/projects/e2e-project-launch');
+  await expect(page.getByText('Ordenar tarea del inbox')).toBeVisible();
+});
+
+test('groups due-today work in the Today view', async ({ page, request }) => {
+  const dueToday = new Date().toISOString().replace('T', ' ');
+
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Revisar vencimiento de hoy',
+        description: '',
+        is_completed: false,
+        project: 'e2e-project-launch',
+        realization_at: '',
+        due_at: dueToday,
+        plazo: 'Corto',
+      },
+    },
+  });
+
+  await page.goto('/');
+  const todaySection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Para hoy' }) });
+  await expect(todaySection.getByText('Revisar vencimiento de hoy')).toBeVisible();
 });
 
 test('creates and completes a task against mutable e2e fixtures', async ({ page }) => {
@@ -210,15 +271,22 @@ test('edits and deletes a project against mutable e2e fixtures', async ({ page }
 test('edits and deletes a task against mutable e2e fixtures', async ({ page }) => {
   await page.goto('/projects/e2e-project-launch');
 
-  await page.getByText('Preparar notas de lanzamiento').hover();
-  await page.getByRole('button', { name: 'Editar tarea' }).first().click();
-  await page.getByRole('textbox', { name: /T.tulo de tarea/i }).fill('Notas editadas en E2E');
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Abrir detalles de Preparar notas de lanzamiento' }).click();
+  const detailDialog = page.getByRole('dialog', { name: 'Detalle de tarea' });
+  await expect(detailDialog).toBeVisible();
+  await detailDialog.getByRole('textbox', { name: /T.tulo de tarea/i }).fill('Notas editadas en E2E');
+  await detailDialog.getByRole('textbox', { name: /Descripcion de tarea/i }).fill('Detalle editado desde el inspector');
+  await detailDialog.getByLabel('Vencimiento').fill('2026-05-15T11:00');
+  await detailDialog.getByLabel('Plazo').selectOption('Mediano');
+  await detailDialog.getByRole('button', { name: 'Guardar tarea' }).click();
 
   await expect(page.getByText('Notas editadas en E2E')).toBeVisible();
+  await expect(page.getByText('Detalle editado desde el inspector')).toBeVisible();
+  await expect(page.getByText('Plazo: Mediano')).toBeVisible();
 
   await page.reload();
   await expect(page.getByText('Notas editadas en E2E')).toBeVisible();
+  await expect(page.getByText('Detalle editado desde el inspector')).toBeVisible();
 
   await page.getByText('Notas editadas en E2E').hover();
   await page.getByRole('button', { name: 'Eliminar tarea' }).first().click();

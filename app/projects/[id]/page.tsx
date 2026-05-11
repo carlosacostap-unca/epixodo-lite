@@ -4,7 +4,7 @@ import CreateTask from '@/app/components/CreateTask';
 import TaskItem from '@/app/components/TaskItem';
 import EditableProject from '@/app/components/EditableProject';
 import TaskSearch from '@/app/components/TaskSearch';
-import { getProject, getTasks } from '@/lib/data';
+import { getProject, getProjects, getTasks } from '@/lib/data';
 
 export const revalidate = 0; 
 
@@ -21,11 +21,11 @@ export default async function ProjectPage({
   const tq = resolvedSearchParams.tq || '';
   
   let project: Project | null = null;
+  let projects: Project[] = [];
   let tasks: Task[] = [];
 
   try {
-    project = await getProject(projectId);
-    tasks = await getTasks(projectId, tq);
+    [project, projects, tasks] = await Promise.all([getProject(projectId), getProjects(), getTasks(projectId, tq)]);
   } catch (error) {
     console.error("Error al obtener datos del proyecto:", error);
   }
@@ -69,7 +69,7 @@ export default async function ProjectPage({
         <div className="mt-8 flex flex-col gap-3">
           {tasks.length > 0 ? (
             tasks.map(task => (
-              <TaskItem key={task.id} task={task} />
+              <TaskItem key={task.id} task={task} projects={projects} />
             ))
           ) : (
             <div className="text-center py-16 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700 border-dashed">

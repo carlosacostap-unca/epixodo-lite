@@ -34,6 +34,14 @@ function getAudioFileName(mimeType: string) {
   return 'quick-task.webm';
 }
 
+function getPlacementText(saveData: QuickTaskResponse) {
+  if (saveData.assignedProjectTitle) {
+    return `Asignada a ${saveData.assignedProjectTitle}`;
+  }
+
+  return 'Quedo en Inbox';
+}
+
 export default function QuickVoiceTaskCapture() {
   const [isSupported, setIsSupported] = useState(false);
   const [state, setState] = useState<QuickCaptureState>('idle');
@@ -98,7 +106,7 @@ export default function QuickVoiceTaskCapture() {
       }
 
       setLastTaskTitle(saveData.task?.title || transcript);
-      setLastTaskPlacement(saveData.assignedProjectTitle ? `Asignada a ${saveData.assignedProjectTitle}` : 'Sin proyecto');
+      setLastTaskPlacement(getPlacementText(saveData));
       setState('success');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'No se pudo crear la tarea.');
@@ -170,7 +178,8 @@ export default function QuickVoiceTaskCapture() {
   };
 
   const isBusy = state === 'recording' || state === 'transcribing' || state === 'saving';
-  const buttonLabel = state === 'recording' ? 'Detener' : 'Grabar tarea';
+  const buttonLabel = state === 'recording' ? 'Detener' : 'Grabar';
+  const buttonAriaLabel = state === 'recording' ? 'Detener' : 'Grabar tarea';
   const statusText =
     state === 'recording'
       ? 'Grabando'
@@ -185,42 +194,43 @@ export default function QuickVoiceTaskCapture() {
               : 'Listo';
 
   return (
-    <main className="min-h-dvh bg-gray-950 text-white flex flex-col px-4 py-3 overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between gap-3 text-sm">
-        <p className="font-semibold tracking-wide">Captura rapida</p>
-        <Link href="/" className="rounded-full border border-white/20 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white">
+    <main className="flex min-h-dvh flex-col overflow-hidden bg-gray-950 px-4 py-3 text-white">
+      <header className="flex shrink-0 items-center justify-between gap-3 text-xs">
+        <p className="font-semibold tracking-wide text-white/80">Captura rapida</p>
+        <Link href="/" className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:text-white">
           Inicio
         </Link>
       </header>
 
-      <section className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-        <div className="min-h-16 max-w-72">
-          <p role="status" className="text-sm font-semibold uppercase tracking-wider text-blue-200">
+      <section className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <div className="min-h-14 max-w-72">
+          <p role="status" className="text-xs font-semibold uppercase tracking-wider text-blue-200">
             {statusText}
           </p>
           {state === 'success' && lastTaskTitle ? (
-            <p className="mt-2 text-lg font-semibold leading-tight break-words">{lastTaskTitle}</p>
+            <p className="mt-1.5 text-lg font-semibold leading-tight break-words">{lastTaskTitle}</p>
           ) : (
-            <h1 className="mt-2 text-2xl font-bold leading-tight">Deci tu tarea</h1>
+            <h1 className="mt-1.5 text-2xl font-bold leading-tight">Deci tu tarea</h1>
           )}
         </div>
 
         <button
           type="button"
+          aria-label={buttonAriaLabel}
           onClick={state === 'recording' ? stopRecording : startRecording}
           disabled={!isSupported || (isBusy && state !== 'recording')}
-          className="grid h-32 w-32 place-items-center rounded-full bg-blue-500 px-4 text-base font-bold text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-400 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-300"
+          className="grid aspect-square w-[clamp(6.5rem,34vw,8rem)] place-items-center rounded-full bg-blue-500 px-4 text-base font-bold text-white shadow-xl shadow-blue-950/40 transition hover:bg-blue-400 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-300"
         >
           {buttonLabel}
         </button>
 
-        <div className="min-h-14 max-w-72">
+        <div className="min-h-12 max-w-72">
           {!isSupported ? (
             <p className="text-sm font-medium text-amber-200">La grabacion no esta disponible en este navegador.</p>
           ) : null}
-          {state === 'recording' ? <p className="text-sm text-white/70">Toca detener cuando termines.</p> : null}
-          {state === 'transcribing' ? <p className="text-sm text-white/70">Procesando el audio con OpenAI.</p> : null}
-          {state === 'saving' ? <p className="text-sm text-white/70">Analizando y guardando la tarea.</p> : null}
+          {state === 'recording' ? <p className="text-sm text-white/70">Toca detener al terminar.</p> : null}
+          {state === 'transcribing' ? <p className="text-sm text-white/70">OpenAI esta transcribiendo.</p> : null}
+          {state === 'saving' ? <p className="text-sm text-white/70">Analizando y guardando.</p> : null}
           {state === 'success' ? <p className="text-sm text-green-200">{lastTaskPlacement || 'Podes grabar otra tarea.'}</p> : null}
           {state === 'error' && error ? (
             <p role="alert" className="text-sm font-medium text-red-200">
