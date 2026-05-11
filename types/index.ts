@@ -11,8 +11,12 @@ export interface Project {
 export interface Task {
   id: string;
   title: string;
+  description: string;
   is_completed: boolean;
-  project: string; // Relación con Project.id
+  project: string; // Relacion con Project.id
+  realization_at: string;
+  due_at: string;
+  plazo: 'Corto' | 'Mediano' | 'Largo' | '';
   created: string;
   updated: string;
 }

@@ -1,6 +1,7 @@
 import { analyzeTaskRouting, fallbackTaskTitle, type ProjectCandidate, type TaskRoutingAnalysis } from '@/lib/aiTaskRouting';
 import { createE2ETask, listE2EProjects } from '@/lib/e2eStore';
 import { pb } from '@/lib/pocketbase';
+import { dateTimeInputToPocketDate } from '@/lib/taskDates';
 import type { Project, Task } from '@/types';
 
 const useE2EFixtures = process.env.NEXT_PUBLIC_E2E_MOCKS === '1';
@@ -42,16 +43,29 @@ function normalizeRouting(analysis: TaskRoutingAnalysis, projects: ProjectCandid
 
   return {
     taskTitle: fallbackTaskTitle(analysis.taskTitle),
+    taskDescription: analysis.taskDescription,
+    realizationAt: analysis.realizationAt,
+    dueAt: analysis.dueAt,
+    plazo: analysis.plazo,
     matchedProject,
     confidence: analysis.confidence,
   };
+}
+
+function aiDateToPocketDate(value: string | null) {
+  if (!value) return '';
+  return dateTimeInputToPocketDate(value);
 }
 
 export async function createRoutedVoiceTask(transcript: string): Promise<RoutedVoiceTaskResult> {
   const projects = await listProjectCandidatesForRouting();
   const fallbackAnalysis: TaskRoutingAnalysis = {
     taskTitle: fallbackTaskTitle(transcript),
+    taskDescription: '',
     projectId: null,
+    realizationAt: null,
+    dueAt: null,
+    plazo: null,
     confidence: 'low',
     reason: 'Fallback local.',
   };
@@ -63,10 +77,14 @@ export async function createRoutedVoiceTask(transcript: string): Promise<RoutedV
     console.error('AI task routing failed; creating unassigned task:', error);
   }
 
-  const { taskTitle, matchedProject, confidence } = normalizeRouting(analysis, projects);
+  const { taskTitle, taskDescription, realizationAt, dueAt, plazo, matchedProject, confidence } = normalizeRouting(analysis, projects);
   const taskInput = {
     title: taskTitle,
+    description: taskDescription,
     is_completed: false,
+    ...(aiDateToPocketDate(realizationAt) ? { realization_at: aiDateToPocketDate(realizationAt) } : {}),
+    ...(aiDateToPocketDate(dueAt) ? { due_at: aiDateToPocketDate(dueAt) } : {}),
+    ...(plazo ? { plazo } : {}),
     ...(matchedProject ? { project: matchedProject.id } : {}),
   };
 

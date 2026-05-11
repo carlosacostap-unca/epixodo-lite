@@ -19,6 +19,7 @@ const PB_URL = normalizeUrl(
 );
 
 const expectedCollections = ["projects", "tasks"];
+const expectedTaskFields = ["title", "description", "is_completed", "project", "realization_at", "due_at", "plazo"];
 
 let authAttempted = false;
 let pbInstance = null;
@@ -339,12 +340,17 @@ const toolHandlers = {
     const collections = await pb.collections.getFullList({ sort: "name" });
     const names = new Set(collections.map((collection) => collection.name));
     const missing = expectedCollections.filter((name) => !names.has(name));
+    const tasksCollection = collections.find((collection) => collection.name === "tasks");
+    const taskFieldNames = new Set((tasksCollection?.fields || []).map((field) => field.name));
+    const missingTaskFields = expectedTaskFields.filter((name) => !taskFieldNames.has(name));
 
     return {
-      ok: missing.length === 0,
+      ok: missing.length === 0 && missingTaskFields.length === 0,
       expected: expectedCollections,
       missing,
       present: expectedCollections.filter((name) => names.has(name)),
+      expectedTaskFields,
+      missingTaskFields,
     };
   },
 };

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Project, Task } from '@/types';
 import { assignTaskToProject } from '@/lib/data';
+import { formatPocketDateTime } from '@/lib/taskDates';
 
 type Props = {
   initialTasks: Task[];
@@ -47,6 +48,14 @@ export default function UnassignedTasks({ initialTasks, projects }: Props) {
     return null;
   }
 
+  const taskDetails = (task: Task) =>
+    [
+      task.description,
+      task.plazo ? `Plazo: ${task.plazo}` : '',
+      task.realization_at ? `Realizacion: ${formatPocketDateTime(task.realization_at)}` : '',
+      task.due_at ? `Vence: ${formatPocketDateTime(task.due_at)}` : '',
+    ].filter(Boolean);
+
   return (
     <section className="mb-10 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
       <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -66,7 +75,18 @@ export default function UnassignedTasks({ initialTasks, projects }: Props) {
               key={task.id}
               className="flex flex-col gap-3 rounded-xl border border-white/70 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between"
             >
-              <p className="text-base font-semibold text-gray-900 dark:text-white">{task.title}</p>
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">{task.title}</p>
+                {taskDetails(task).length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    {taskDetails(task).map((detail) => (
+                      <span key={detail} className="rounded-full bg-gray-100 px-2.5 py-1 dark:bg-gray-900/70">
+                        {detail}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="flex flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <select
                   value={selectedProjectId}

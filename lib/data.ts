@@ -12,8 +12,12 @@ type ProjectPlazo = Project['plazo'];
 type ProjectCreateInput = Pick<Project, 'title' | 'description' | 'plazo'>;
 type ProjectUpdateInput = Partial<ProjectCreateInput> & Pick<Project, 'id'>;
 type ProjectOrderInput = Pick<Project, 'id' | 'order'> & { plazo: ProjectPlazo };
-type TaskCreateInput = Pick<Task, 'title' | 'is_completed'> & Partial<Pick<Task, 'project'>>;
-type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed' | 'project'>> & Pick<Task, 'id'>;
+type TaskCreateInput = Pick<Task, 'title' | 'is_completed'> &
+  Partial<Pick<Task, 'description' | 'project' | 'realization_at' | 'due_at' | 'plazo'>>;
+type TaskUpdateInput = Partial<
+  Pick<Task, 'title' | 'description' | 'is_completed' | 'project' | 'realization_at' | 'due_at' | 'plazo'>
+> &
+  Pick<Task, 'id'>;
 
 const useE2EFixtures = process.env.NEXT_PUBLIC_E2E_MOCKS === '1';
 

@@ -40,7 +40,7 @@ test('creates a project against mutable e2e fixtures', async ({ page }) => {
 
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Proyecto creado en E2E');
   await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion con fixtures mutables');
-  await page.getByRole('combobox').selectOption('Largo');
+  await page.getByLabel(/Secci.n/).selectOption('Largo');
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Proyecto creado en E2E' })).toBeVisible();
@@ -161,14 +161,24 @@ test('creates and completes a task against mutable e2e fixtures', async ({ page 
   await page.goto('/projects/e2e-project-launch');
 
   await page.getByPlaceholder(/nueva tarea/i).fill('Tarea creada en E2E');
+  await page.getByRole('textbox', { name: 'Descripcion de la tarea' }).fill('Detalle visible en la tarea');
+  await page.getByLabel('Realizacion').fill('2026-05-13T10:30');
+  await page.getByLabel('Vencimiento').fill('2026-05-14T18:00');
+  await page.getByLabel('Plazo').selectOption('Corto');
   await page.getByRole('button', { name: 'Agregar Tarea' }).click();
   await expect(page.getByText('Tarea creada en E2E')).toBeVisible();
+  await expect(page.getByText('Detalle visible en la tarea')).toBeVisible();
+  await expect(page.getByText('Plazo: Corto')).toBeVisible();
+  await expect(page.getByText(/Realizacion:/)).toBeVisible();
+  await expect(page.getByText(/Vence:/)).toBeVisible();
 
   await page.locator('input[type="checkbox"]').last().check();
   await expect(page.locator('input[type="checkbox"]').last()).toBeChecked();
 
   await page.reload();
   await expect(page.getByText('Tarea creada en E2E')).toBeVisible();
+  await expect(page.getByText('Detalle visible en la tarea')).toBeVisible();
+  await expect(page.getByText('Plazo: Corto')).toBeVisible();
   await expect(page.locator('input[type="checkbox"]').last()).toBeChecked();
 });
 
@@ -178,7 +188,7 @@ test('edits and deletes a project against mutable e2e fixtures', async ({ page }
   await page.getByRole('button', { name: 'Editar', exact: true }).click();
   await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Proyecto editado en E2E');
   await page.getByPlaceholder(/Descripci.n del proyecto/i).fill('Descripcion actualizada por Playwright');
-  await page.getByRole('combobox').selectOption('Largo');
+  await page.getByLabel(/Secci.n/).selectOption('Largo');
   await page.getByRole('button', { name: 'Guardar Cambios' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Proyecto editado en E2E' })).toBeVisible();

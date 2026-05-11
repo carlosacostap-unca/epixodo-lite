@@ -5,8 +5,12 @@ type ProjectPlazo = Project['plazo'];
 type ProjectCreateInput = Pick<Project, 'title' | 'description' | 'plazo'>;
 type ProjectUpdateInput = Partial<ProjectCreateInput> & Pick<Project, 'id'>;
 type ProjectOrderInput = Pick<Project, 'id' | 'order'> & { plazo: ProjectPlazo };
-type TaskCreateInput = Pick<Task, 'title' | 'is_completed'> & Partial<Pick<Task, 'project'>>;
-type TaskUpdateInput = Partial<Pick<Task, 'title' | 'is_completed' | 'project'>> & Pick<Task, 'id'>;
+type TaskCreateInput = Pick<Task, 'title' | 'is_completed'> &
+  Partial<Pick<Task, 'description' | 'project' | 'realization_at' | 'due_at' | 'plazo'>>;
+type TaskUpdateInput = Partial<
+  Pick<Task, 'title' | 'description' | 'is_completed' | 'project' | 'realization_at' | 'due_at' | 'plazo'>
+> &
+  Pick<Task, 'id'>;
 
 type E2EStore = {
   nextProjectId: number;
@@ -125,8 +129,12 @@ export function createE2ETask(task: TaskCreateInput) {
   const createdTask: Task = {
     id: `e2e-task-created-${store.nextTaskId++}`,
     title: task.title,
+    description: task.description || '',
     is_completed: task.is_completed,
     project: task.project || '',
+    realization_at: task.realization_at || '',
+    due_at: task.due_at || '',
+    plazo: task.plazo || '',
     created: timestamp,
     updated: timestamp,
   };

@@ -6,7 +6,11 @@ export type ProjectCandidate = {
 
 export type TaskRoutingAnalysis = {
   taskTitle: string;
+  taskDescription: string;
   projectId: string | null;
+  realizationAt: string | null;
+  dueAt: string | null;
+  plazo: 'Corto' | 'Mediano' | 'Largo' | null;
   confidence: 'high' | 'medium' | 'low';
   reason: string;
 };
@@ -64,11 +68,19 @@ function coerceAnalysis(value: unknown, transcript: string): TaskRoutingAnalysis
   const confidence = input.confidence === 'high' || input.confidence === 'medium' || input.confidence === 'low' ? input.confidence : 'low';
   const projectId = typeof input.projectId === 'string' && input.projectId.trim() ? input.projectId.trim() : null;
   const taskTitle = typeof input.taskTitle === 'string' && input.taskTitle.trim() ? fallbackTaskTitle(input.taskTitle) : fallbackTaskTitle(transcript);
+  const taskDescription = typeof input.taskDescription === 'string' ? input.taskDescription.trim() : '';
+  const realizationAt = typeof input.realizationAt === 'string' && input.realizationAt.trim() ? input.realizationAt.trim() : null;
+  const dueAt = typeof input.dueAt === 'string' && input.dueAt.trim() ? input.dueAt.trim() : null;
+  const plazo = input.plazo === 'Corto' || input.plazo === 'Mediano' || input.plazo === 'Largo' ? input.plazo : null;
   const reason = typeof input.reason === 'string' ? input.reason : '';
 
   return {
     taskTitle,
+    taskDescription,
     projectId,
+    realizationAt,
+    dueAt,
+    plazo,
     confidence,
     reason,
   };
@@ -82,7 +94,11 @@ function mockAnalysis(transcript: string, projects: ProjectCandidate[]): TaskRou
   if (launchProject && (lowerTranscript.includes('lanzamiento') || lowerTranscript.includes('producto'))) {
     return {
       taskTitle: title,
+      taskDescription: '',
       projectId: launchProject.id,
+      realizationAt: null,
+      dueAt: null,
+      plazo: null,
       confidence: 'high',
       reason: 'Coincide con el proyecto de lanzamiento.',
     };
@@ -90,7 +106,11 @@ function mockAnalysis(transcript: string, projects: ProjectCandidate[]): TaskRou
 
   return {
     taskTitle: title,
+    taskDescription: '',
     projectId: null,
+    realizationAt: null,
+    dueAt: null,
+    plazo: null,
     confidence: 'low',
     reason: 'No hay un proyecto suficientemente claro.',
   };
@@ -123,6 +143,10 @@ export async function analyzeTaskRouting(transcript: string, projects: ProjectCa
               'No copies la transcripcion literal: transforma el texto hablado en un titulo breve, limpio y accionable.',
               'Elimina muletillas, repeticiones, saludos, explicaciones meta y frases como "tengo que", "me gustaria", "recordame que".',
               'El titulo debe ser natural para una lista de tareas, idealmente entre 3 y 10 palabras.',
+              'Usa taskDescription para conservar detalles utiles que no entren bien en el titulo.',
+              'Extrae realizationAt y dueAt si el audio menciona fechas u horarios. Devuelvelos como ISO 8601 con zona horaria o null.',
+              'Para fechas relativas, toma como referencia la fecha actual del usuario y la zona horaria provistas.',
+              'Extrae plazo solo si el audio lo menciona o es muy evidente: Corto, Mediano o Largo. Si no, null.',
               'No inventes informacion que no este en el audio.',
               'Decide si corresponde asignarla a un proyecto existente.',
               'Solo usa confidence high cuando el proyecto es claramente mencionado o inferible sin ambiguedad.',
@@ -134,6 +158,8 @@ export async function analyzeTaskRouting(transcript: string, projects: ProjectCa
           content: JSON.stringify({
             transcript,
             projects,
+            currentDate: new Date().toISOString(),
+            timezone: 'America/Buenos_Aires',
           }),
         },
       ],
@@ -150,9 +176,25 @@ export async function analyzeTaskRouting(transcript: string, projects: ProjectCa
                 type: 'string',
                 description: 'Titulo refinado, breve y accionable para la tarea.',
               },
+              taskDescription: {
+                type: 'string',
+                description: 'Descripcion breve con detalles utiles extraidos del audio. Vacio si no hay detalles.',
+              },
               projectId: {
                 type: ['string', 'null'],
                 description: 'Id exacto del proyecto elegido, o null si no hay confianza alta.',
+              },
+              realizationAt: {
+                type: ['string', 'null'],
+                description: 'Fecha y hora de realizacion en ISO 8601, o null.',
+              },
+              dueAt: {
+                type: ['string', 'null'],
+                description: 'Fecha y hora de vencimiento en ISO 8601, o null.',
+              },
+              plazo: {
+                type: ['string', 'null'],
+                enum: ['Corto', 'Mediano', 'Largo', null],
               },
               confidence: {
                 type: 'string',
@@ -162,7 +204,7 @@ export async function analyzeTaskRouting(transcript: string, projects: ProjectCa
                 type: 'string',
               },
             },
-            required: ['taskTitle', 'projectId', 'confidence', 'reason'],
+            required: ['taskTitle', 'taskDescription', 'projectId', 'realizationAt', 'dueAt', 'plazo', 'confidence', 'reason'],
           },
         },
       },
