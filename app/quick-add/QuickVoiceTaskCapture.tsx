@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createProject } from '@/lib/data';
 
 type QuickCaptureState = 'idle' | 'recording' | 'transcribing' | 'saving' | 'success' | 'error';
 
 type TranscriptionResponse = {
   transcript?: string;
+  error?: string;
+};
+
+type QuickTaskResponse = {
   error?: string;
 };
 
@@ -77,11 +80,17 @@ export default function QuickVoiceTaskCapture() {
       }
 
       setState('saving');
-      await createProject({
-        title: transcript,
-        description: 'Creada desde captura rápida por voz.',
-        plazo: 'Tareas',
+      const saveResponse = await fetch('/api/quick-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: transcript }),
       });
+      const saveData = (await saveResponse.json()) as QuickTaskResponse;
+
+      if (!saveResponse.ok) {
+        throw new Error(saveData.error || 'No se pudo guardar la tarea en Tareas.');
+      }
+
       setLastTaskTitle(transcript);
       setState('success');
     } catch (error) {
