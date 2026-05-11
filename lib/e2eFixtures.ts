@@ -28,6 +28,15 @@ export const e2eProjects: Project[] = [
     created: '2026-04-05 12:00:00.000Z',
     updated: '2026-04-05 12:00:00.000Z',
   },
+  {
+    id: 'e2e-project-tasks',
+    title: 'Bandeja de tareas',
+    description: 'Organizar trabajos sueltos antes de convertirlos en proyectos.',
+    plazo: 'Tareas',
+    order: 0,
+    created: '2026-04-06 12:00:00.000Z',
+    updated: '2026-04-06 12:00:00.000Z',
+  },
 ];
 
 export const e2eTasks: Task[] = [

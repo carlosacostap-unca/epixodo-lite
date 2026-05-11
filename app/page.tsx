@@ -25,7 +25,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             Gestión de <span className="text-blue-600 dark:text-blue-500">Proyectos</span>
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-2 text-lg">
-            Organiza tus metas moviendo las tarjetas entre los distintos plazos.
+            Organiza tus metas moviendo las tarjetas entre plazos y tareas.
           </p>
         </div>
         <div className="w-full md:w-96">

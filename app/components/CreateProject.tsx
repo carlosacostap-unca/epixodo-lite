@@ -86,7 +86,7 @@ export default function CreateProject() {
         </div>
         <div className="md:col-span-4 flex gap-3 items-end">
           <select
-            aria-label="Plazo del proyecto"
+            aria-label="Sección del proyecto"
             value={plazo}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlazo(e.target.value as ProjectPlazo)}
             className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
@@ -96,6 +96,7 @@ export default function CreateProject() {
             <option value="Corto">Corto Plazo</option>
             <option value="Mediano">Mediano Plazo</option>
             <option value="Largo">Largo Plazo</option>
+            <option value="Tareas">Tareas</option>
           </select>
           <button
             type="submit"

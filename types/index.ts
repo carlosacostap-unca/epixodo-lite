@@ -2,7 +2,7 @@ export interface Project {
   id: string;
   title: string;
   description: string;
-  plazo: 'Corto' | 'Mediano' | 'Largo' | '';
+  plazo: 'Corto' | 'Mediano' | 'Largo' | 'Tareas' | '';
   order?: number;
   created: string;
   updated: string;

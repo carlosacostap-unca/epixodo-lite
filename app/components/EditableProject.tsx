@@ -101,7 +101,7 @@ export default function EditableProject({ project }: { project: Project }) {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-grow">
             <label htmlFor="edit-project-plazo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Plazo
+              Sección
             </label>
             <select
               id="edit-project-plazo"
@@ -113,6 +113,7 @@ export default function EditableProject({ project }: { project: Project }) {
               <option value="Corto">Corto Plazo</option>
               <option value="Mediano">Mediano Plazo</option>
               <option value="Largo">Largo Plazo</option>
+              <option value="Tareas">Tareas</option>
             </select>
           </div>
         </div>
@@ -175,7 +176,7 @@ export default function EditableProject({ project }: { project: Project }) {
       <h1 className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white pr-40 tracking-tight">{project.title}</h1>
       {project.plazo ? (
         <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm px-3 py-1.5 rounded-full mb-4 font-semibold border border-blue-100 dark:border-blue-800">
-          Plazo: {project.plazo}
+          Sección: {project.plazo}
         </div>
       ) : (
         <div className="inline-block bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm px-3 py-1.5 rounded-full mb-4 font-semibold">

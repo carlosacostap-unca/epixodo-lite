@@ -13,6 +13,8 @@ test('loads the project board home page from e2e fixtures', async ({ page }) => 
   await expect(page.getByRole('heading', { level: 1, name: /Proyectos/i })).toBeVisible();
   await expect(page.getByPlaceholder(/Buscar proyectos/i)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lanzamiento del producto' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tareas', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bandeja de tareas' })).toBeVisible();
 });
 
 test('filters projects and opens a fixture project detail', async ({ page }) => {
@@ -46,6 +48,23 @@ test('creates a project against mutable e2e fixtures', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Proyecto creado en E2E' })).toBeVisible();
 });
 
+test('creates a project in the Tareas board section', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByPlaceholder(/T.tulo del proyecto/i).fill('Trabajo suelto en E2E');
+  await page.getByPlaceholder(/Descripci.n breve/i).fill('Validacion de la seccion Tareas');
+  await page.getByRole('combobox').selectOption('Tareas');
+  await page.getByRole('button', { name: 'Crear' }).click();
+
+  const tasksSection = page
+    .locator('div')
+    .filter({ has: page.getByRole('heading', { name: 'Tareas', exact: true }) })
+    .filter({ hasText: 'Trabajo suelto en E2E' })
+    .first();
+
+  await expect(tasksSection.getByRole('heading', { name: 'Trabajo suelto en E2E' })).toBeVisible();
+});
+
 test('creates and completes a task against mutable e2e fixtures', async ({ page }) => {
   await page.goto('/projects/e2e-project-launch');
 
@@ -71,7 +90,7 @@ test('edits and deletes a project against mutable e2e fixtures', async ({ page }
   await page.getByRole('button', { name: 'Guardar Cambios' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Proyecto editado en E2E' })).toBeVisible();
-  await expect(page.getByText('Plazo: Largo')).toBeVisible();
+  await expect(page.getByText('Sección: Largo')).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Proyecto editado en E2E' })).toBeVisible();

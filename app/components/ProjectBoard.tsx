@@ -12,6 +12,7 @@ const COLUMNS = [
   { id: 'Corto', title: 'Corto Plazo', color: 'bg-red-50/50 dark:bg-red-900/10', headerColor: 'text-red-600 dark:text-red-400' },
   { id: 'Mediano', title: 'Mediano Plazo', color: 'bg-yellow-50/50 dark:bg-yellow-900/10', headerColor: 'text-yellow-600 dark:text-yellow-400' },
   { id: 'Largo', title: 'Largo Plazo', color: 'bg-green-50/50 dark:bg-green-900/10', headerColor: 'text-green-600 dark:text-green-400' },
+  { id: 'Tareas', title: 'Tareas', color: 'bg-cyan-50/50 dark:bg-cyan-900/10', headerColor: 'text-cyan-700 dark:text-cyan-300' },
   { id: '', title: 'Sin plazo', color: 'bg-gray-50 dark:bg-gray-800/50', headerColor: 'text-gray-600 dark:text-gray-400' }
 ] as const;
 
@@ -122,7 +123,10 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
             onDragOver={handleDragOver}
             onDrop={(e) => handleDropOnColumn(e, column.id)}
           >
-            <h3 className={`font-bold mb-6 flex items-center justify-between text-xl ${column.headerColor}`}>
+            <h3
+              aria-label={column.title}
+              className={`font-bold mb-6 flex items-center justify-between text-xl ${column.headerColor}`}
+            >
               {column.title}
               <span className="bg-white/80 dark:bg-gray-800 text-sm py-1.5 px-3.5 rounded-full shadow-sm text-gray-700 dark:text-gray-300 font-medium">
                 {columnProjects.length} {columnProjects.length === 1 ? 'proyecto' : 'proyectos'}
