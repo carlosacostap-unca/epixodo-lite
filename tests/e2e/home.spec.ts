@@ -22,6 +22,20 @@ test('loads the project board home page from e2e fixtures', async ({ page }) => 
   await expect(page.getByRole('button', { name: 'Grabar tarea' })).toBeVisible();
 });
 
+test('hides primary view navigation while conversational mode is active', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
+
+  await expect(page.getByRole('button', { name: 'Conversar', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Hoy/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Inbox/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Proyectos/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Vistas' }).click();
+  await expect(page.getByRole('link', { name: /Hoy/ }).first()).toBeVisible();
+});
+
 test('creates a task from conversational mode', async ({ page }) => {
   await page.goto('/');
 
@@ -212,6 +226,7 @@ test('filters projects and opens a fixture project detail', async ({ page }) => 
 
   await expect(page).toHaveURL(/\/projects\/e2e-project-launch/);
   await expect(page.getByRole('heading', { level: 1, name: 'Lanzamiento del producto' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Editar' })).toBeVisible();
   await expect(page.getByText('Preparar notas de lanzamiento')).toBeVisible();
   await expect(page.getByText('Revisar feedback inicial')).toBeVisible();
 });

@@ -142,28 +142,7 @@ export default function EditableProject({ project }: { project: Project }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800/80 p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700/60 mb-8 relative group transition-all hover:shadow-md backdrop-blur-xl">
-      <div className="absolute top-6 right-6 flex gap-2 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => {
-            setError('');
-            setIsEditing(true);
-          }}
-          disabled={isLoading}
-          className="bg-gray-50 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 px-4 py-2 rounded-xl text-sm font-medium transition shadow-sm flex items-center gap-2 disabled:opacity-50"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-          Editar
-        </button>
-        <button
-          onClick={() => setIsDeleteDialogOpen(true)}
-          disabled={isLoading}
-          className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 px-4 py-2 rounded-xl text-sm font-medium transition shadow-sm flex items-center gap-2 disabled:opacity-50"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          {isLoading ? 'Eliminando...' : 'Eliminar'}
-        </button>
-      </div>
+    <div className="bg-white dark:bg-gray-800/80 p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700/60 mb-8 relative group transition-all hover:shadow-md backdrop-blur-xl">
       <ConfirmDialog
         open={isDeleteDialogOpen}
         title="Eliminar proyecto"
@@ -173,7 +152,30 @@ export default function EditableProject({ project }: { project: Project }) {
         onCancel={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDelete}
       />
-      <h1 className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white pr-40 tracking-tight">{project.title}</h1>
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <h1 className="min-w-0 text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">{project.title}</h1>
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+          <button
+            onClick={() => {
+              setError('');
+              setIsEditing(true);
+            }}
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-100 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            Editar
+          </button>
+          <button
+            onClick={() => setIsDeleteDialogOpen(true)}
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-100 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            {isLoading ? 'Eliminando...' : 'Eliminar'}
+          </button>
+        </div>
+      </div>
       {project.plazo ? (
         <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm px-3 py-1.5 rounded-full mb-4 font-semibold border border-blue-100 dark:border-blue-800">
           Sección: {project.plazo}

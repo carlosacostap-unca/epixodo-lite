@@ -192,6 +192,15 @@ function ProjectsView({
 export default function WorkspaceShell({ activeView, projects, visibleProjects, tasks, unassignedTasks, query }: Props) {
   const todayGroups = groupTodayTasks(tasks);
   const todayCount = todayGroups.overdue.length + todayGroups.today.length;
+  const renderWorkspaceNav = () => (
+    <WorkspaceNav
+      activeView={activeView}
+      query={query}
+      inboxCount={unassignedTasks.length}
+      todayCount={todayCount}
+      projectCount={visibleProjects.length}
+    />
+  );
   const visualView = (
     <>
       {activeView === 'today' ? <TodayView tasks={tasks} projects={projects} /> : null}
@@ -201,46 +210,11 @@ export default function WorkspaceShell({ activeView, projects, visibleProjects, 
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 font-sans text-gray-950 dark:bg-gray-950 dark:text-white">
-      <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[240px_1fr]">
-        <aside className="hidden border-r border-gray-200 bg-white/80 px-5 py-6 dark:border-gray-800 dark:bg-gray-900/70 lg:block">
-          <div className="sticky top-6 space-y-6">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Epixodo Lite</p>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Panel</h1>
-            </div>
-            <WorkspaceNav
-              activeView={activeView}
-              query={query}
-              inboxCount={unassignedTasks.length}
-              todayCount={todayCount}
-              projectCount={visibleProjects.length}
-            />
-          </div>
-        </aside>
-
-        <div className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-8 lg:pb-10">
-          <header className="mb-5 space-y-4 lg:mb-8">
-            <div className="lg:hidden">
-              <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Epixodo Lite</p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Panel</h1>
-            </div>
-            <div className="sticky top-0 z-20 -mx-4 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95 sm:-mx-6 sm:px-6 lg:hidden">
-              <WorkspaceNav
-                activeView={activeView}
-                query={query}
-                inboxCount={unassignedTasks.length}
-                todayCount={todayCount}
-                projectCount={visibleProjects.length}
-              />
-            </div>
-          </header>
-
-          <section className="mx-auto max-w-6xl">
-            <InteractionModeSwitch visual={visualView} conversational={<ConversationalAssistant />} />
-          </section>
-        </div>
-      </div>
-    </main>
+    <InteractionModeSwitch
+      visual={visualView}
+      conversational={<ConversationalAssistant />}
+      desktopNav={renderWorkspaceNav()}
+      mobileNav={renderWorkspaceNav()}
+    />
   );
 }
