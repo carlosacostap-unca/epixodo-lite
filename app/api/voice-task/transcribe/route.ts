@@ -1,5 +1,5 @@
 const OPENAI_TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
-const TRANSCRIPTION_MODEL = 'gpt-4o-transcribe';
+const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe-2025-12-15';
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 type OpenAITranscriptionResponse = {

@@ -45,7 +45,7 @@ The E2E server runs with mutable local fixtures from `lib/e2eFixtures.ts` instea
 
 ## Voice dictation
 
-Voice task capture uses the OpenAI Audio Transcriptions API from a Next.js route handler. Set `OPENAI_API_KEY` in the server environment before using dictation outside E2E tests.
+Voice task capture uses the OpenAI Audio Transcriptions API from a Next.js route handler with `gpt-4o-mini-transcribe-2025-12-15`. Set `OPENAI_API_KEY` in the server environment before using dictation outside E2E tests.
 
 ## Learn More
 
