@@ -244,11 +244,11 @@ export default function ConversationalAssistant() {
         }
       `}</style>
 
-      <div className="min-h-[520px] px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto flex min-h-[480px] max-w-3xl flex-col justify-between gap-6">
+      <div className="min-h-[440px] px-4 py-4 sm:min-h-[520px] sm:px-6 sm:py-5 lg:px-8">
+        <div className="mx-auto flex min-h-[400px] max-w-3xl flex-col justify-between gap-4 sm:min-h-[480px] sm:gap-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold text-gray-950 dark:text-white">Conversar</h2>
+              <h2 className="text-lg font-bold text-gray-950 dark:text-white sm:text-xl">Conversar</h2>
               {lastRequest ? <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">Ultimo pedido: {lastRequest}</p> : null}
             </div>
             {status ? (
@@ -268,7 +268,7 @@ export default function ConversationalAssistant() {
               </div>
             ) : screenState === 'result' ? (
               <div key={reply} className="reply-reveal w-full" aria-live="polite">
-                <p className="whitespace-pre-wrap text-balance text-2xl font-bold leading-tight text-gray-950 dark:text-white sm:text-4xl">
+                <p className="whitespace-pre-wrap text-balance text-xl font-bold leading-tight text-gray-950 dark:text-white sm:text-4xl">
                   {reply}
                 </p>
               </div>
@@ -279,10 +279,10 @@ export default function ConversationalAssistant() {
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={!isSupported && !isRecording}
                   aria-pressed={isRecording}
-                  className="mx-auto flex aspect-square w-52 max-w-[72vw] flex-col items-center justify-center rounded-full bg-gray-950 text-white shadow-xl shadow-gray-950/20 transition hover:-translate-y-0.5 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 sm:w-64"
+                  className="mx-auto flex aspect-square w-44 max-w-[64vw] flex-col items-center justify-center rounded-full bg-gray-950 text-white shadow-xl shadow-gray-950/20 transition hover:-translate-y-0.5 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 sm:w-64"
                 >
-                  <span className="text-sm font-bold uppercase tracking-wide">{isRecording ? 'Grabando' : 'Presionar'}</span>
-                  <span className="mt-2 text-4xl font-black sm:text-5xl">{isRecording ? 'Detener' : 'Hablar'}</span>
+                  <span className="text-xs font-bold uppercase tracking-wide sm:text-sm">{isRecording ? 'Grabando' : 'Presionar'}</span>
+                  <span className="mt-1 text-4xl font-black sm:mt-2 sm:text-5xl">{isRecording ? 'Detener' : 'Hablar'}</span>
                 </button>
                 {!isSupported ? <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">Microfono no disponible</p> : null}
               </div>
@@ -296,7 +296,7 @@ export default function ConversationalAssistant() {
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={!isSupported || isBusy}
-                  className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+                  className="rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 sm:px-5 sm:py-3"
                 >
                   {isRecording ? 'Detener' : 'Hablar de nuevo'}
                 </button>
@@ -310,7 +310,7 @@ export default function ConversationalAssistant() {
                   type="button"
                   onClick={() => void sendMessage(suggestion)}
                   disabled={isBusy || isRecording}
-                  className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 sm:px-3 sm:text-xs"
                 >
                   {suggestion}
                 </button>

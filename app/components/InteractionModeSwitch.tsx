@@ -19,7 +19,7 @@ export default function InteractionModeSwitch({ visual, conversational, desktopN
         type="button"
         onClick={() => setMode('visual')}
         aria-pressed={isVisualMode}
-        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+        className={`rounded-md px-3 py-1.5 text-xs font-semibold transition sm:px-4 sm:py-2 sm:text-sm ${
           isVisualMode
             ? 'bg-gray-950 text-white dark:bg-white dark:text-gray-950'
             : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
@@ -31,7 +31,7 @@ export default function InteractionModeSwitch({ visual, conversational, desktopN
         type="button"
         onClick={() => setMode('conversational')}
         aria-pressed={!isVisualMode}
-        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+        className={`rounded-md px-3 py-1.5 text-xs font-semibold transition sm:px-4 sm:py-2 sm:text-sm ${
           !isVisualMode
             ? 'bg-gray-950 text-white dark:bg-white dark:text-gray-950'
             : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
@@ -57,9 +57,9 @@ export default function InteractionModeSwitch({ visual, conversational, desktopN
           </aside>
         ) : null}
 
-        <div className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-8 lg:pb-10">
+        <div className="min-w-0 px-4 py-4 pb-24 sm:px-6 sm:py-5 lg:px-8 lg:py-8 lg:pb-10">
           <header className="mb-5 space-y-4 lg:mb-8">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
               <div className={isVisualMode ? 'lg:hidden' : ''}>
                 <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Epixodo Lite</p>
                 <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Panel</h1>
