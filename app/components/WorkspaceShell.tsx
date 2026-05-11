@@ -8,6 +8,8 @@ import ProjectSearch from './ProjectSearch';
 import TaskSummaryCard from './TaskSummaryCard';
 import UnassignedTasks from './UnassignedTasks';
 import VoiceTaskCapture from './VoiceTaskCapture';
+import ConversationalAssistant from './ConversationalAssistant';
+import InteractionModeSwitch from './InteractionModeSwitch';
 
 export type WorkspaceView = 'today' | 'inbox' | 'projects';
 
@@ -190,6 +192,13 @@ function ProjectsView({
 export default function WorkspaceShell({ activeView, projects, visibleProjects, tasks, unassignedTasks, query }: Props) {
   const todayGroups = groupTodayTasks(tasks);
   const todayCount = todayGroups.overdue.length + todayGroups.today.length;
+  const visualView = (
+    <>
+      {activeView === 'today' ? <TodayView tasks={tasks} projects={projects} /> : null}
+      {activeView === 'inbox' ? <InboxView tasks={unassignedTasks} projects={projects} /> : null}
+      {activeView === 'projects' ? <ProjectsView projects={projects} visibleProjects={visibleProjects} query={query} /> : null}
+    </>
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-950 dark:bg-gray-950 dark:text-white">
@@ -198,7 +207,7 @@ export default function WorkspaceShell({ activeView, projects, visibleProjects, 
           <div className="sticky top-6 space-y-6">
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Epixodo Lite</p>
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Workspace</h1>
+              <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Panel</h1>
             </div>
             <WorkspaceNav
               activeView={activeView}
@@ -214,7 +223,7 @@ export default function WorkspaceShell({ activeView, projects, visibleProjects, 
           <header className="mb-5 space-y-4 lg:mb-8">
             <div className="lg:hidden">
               <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">Epixodo Lite</p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Workspace</h1>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Panel</h1>
             </div>
             <div className="sticky top-0 z-20 -mx-4 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95 sm:-mx-6 sm:px-6 lg:hidden">
               <WorkspaceNav
@@ -228,9 +237,7 @@ export default function WorkspaceShell({ activeView, projects, visibleProjects, 
           </header>
 
           <section className="mx-auto max-w-6xl">
-            {activeView === 'today' ? <TodayView tasks={tasks} projects={projects} /> : null}
-            {activeView === 'inbox' ? <InboxView tasks={unassignedTasks} projects={projects} /> : null}
-            {activeView === 'projects' ? <ProjectsView projects={projects} visibleProjects={visibleProjects} query={query} /> : null}
+            <InteractionModeSwitch visual={visualView} conversational={<ConversationalAssistant />} />
           </section>
         </div>
       </div>

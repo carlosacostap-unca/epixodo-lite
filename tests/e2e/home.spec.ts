@@ -10,13 +10,55 @@ test('loads the project board home page from e2e fixtures', async ({ page }) => 
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Epixodo Lite/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Workspace' }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Panel' }).first()).toBeVisible();
+  await expect(page.getByText('Workspace')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Vistas' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Conversar', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /Hoy/ }).first()).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('link', { name: /Inbox/ }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: /Proyectos/ }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Sin fecha' })).toBeVisible();
   await expect(page.getByText('Preparar notas de lanzamiento')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Grabar tarea' })).toBeVisible();
+});
+
+test('creates a task from conversational mode', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Conversar' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('Crear tarea llamar al contador');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+
+  await expect(page.getByText(/cree la tarea/i)).toBeVisible();
+
+  await page.goto('/?view=inbox');
+  await expect(page.getByText('llamar al contador')).toBeVisible();
+});
+
+test('answers today task questions from conversational mode', async ({ page, request }) => {
+  const dueToday = new Date().toISOString().replace('T', ' ');
+
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Conversar sobre lo de hoy',
+        description: '',
+        is_completed: false,
+        project: 'e2e-project-launch',
+        realization_at: '',
+        due_at: dueToday,
+        plazo: '',
+      },
+    },
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
+  await page.getByRole('button', { name: 'Que tengo para hoy?' }).click();
+
+  await expect(page.getByText('Conversar sobre lo de hoy')).toBeVisible();
 });
 
 test('filters projects and opens a fixture project detail', async ({ page }) => {
