@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Project } from '@/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -15,9 +15,12 @@ const COLUMNS = [
   { id: '', title: 'Sin plazo', color: 'bg-gray-50 dark:bg-gray-800/50', headerColor: 'text-gray-600 dark:text-gray-400' }
 ] as const;
 
+const orderErrorMessage = 'No se pudo guardar el nuevo orden. Revisa la conexión e inténtalo de nuevo.';
+
 export default function ProjectBoard({ initialProjects }: { initialProjects: Project[] }) {
   const [projects, setProjects] = useState(initialProjects);
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -27,7 +30,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
   const handleDragStart = (e: React.DragEvent, projectId: string) => {
     e.dataTransfer.setData('projectId', projectId);
     setDraggedProjectId(projectId);
-    // Optional: set drag image or effect
+    setOrderError('');
   };
 
   const handleDragEnd = () => {
@@ -35,37 +38,22 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault();
   };
 
-  const handleDropOnProject = async (e: React.DragEvent, targetProjectId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const draggedId = e.dataTransfer.getData('projectId');
-    if (!draggedId || draggedId === targetProjectId) return;
+  const persistProjectOrder = async (updatedProjects: Project[]) => {
+    try {
+      setOrderError('');
+      await updateProjectOrder(updatedProjects);
+      router.refresh();
+    } catch (error) {
+      console.error('Error updating project orders:', error);
+      setOrderError(orderErrorMessage);
+      setProjects(initialProjects);
+    }
+  };
 
-    const draggedProject = projects.find(p => p.id === draggedId);
-    const targetProject = projects.find(p => p.id === targetProjectId);
-    if (!draggedProject || !targetProject) return;
-
-    const targetPlazo = targetProject.plazo || '';
-    
-    // Obtener los proyectos de la columna destino (excluyendo el que se está moviendo)
-    const columnProjects = projects.filter(p => (p.plazo || '') === targetPlazo && p.id !== draggedId);
-    // Asegurarse de que están ordenados por su orden actual o índice
-    columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
-
-    // Encontrar el índice donde queremos insertar
-    const targetIndex = columnProjects.findIndex(p => p.id === targetProjectId);
-    
-    // Insertar el proyecto arrastrado en la nueva posición
-    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: targetPlazo });
-
-    // Reasignar los valores de "order" (0, 1, 2, ...)
-    const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
-
-    // Actualización optimista de la UI
+  const applyProjectOrder = (updatedProjects: Project[]) => {
     setProjects(prev => {
       const newProjects = [...prev];
       updatedProjects.forEach(up => {
@@ -74,17 +62,29 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
       });
       return newProjects;
     });
+  };
 
-    // Guardar los cambios en PocketBase
-    try {
-      await updateProjectOrder(updatedProjects);
-      router.refresh();
-    } catch (error) {
-      console.error('Error updating project orders:', error);
-      alert('Aviso: Hubo un problema guardando el orden. Asegúrate de que creaste el campo "order" (tipo Number) en la colección "projects" en PocketBase.');
-      // Revert on failure
-      setProjects(initialProjects);
-    }
+  const handleDropOnProject = async (e: React.DragEvent, targetProjectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const draggedId = e.dataTransfer.getData('projectId');
+    if (!draggedId || draggedId === targetProjectId) return;
+
+    const draggedProject = projects.find(p => p.id === draggedId);
+    const targetProject = projects.find(p => p.id === targetProjectId);
+    if (!draggedProject || !targetProject) return;
+
+    const targetPlazo = targetProject.plazo || '';
+    const columnProjects = projects.filter(p => (p.plazo || '') === targetPlazo && p.id !== draggedId);
+    columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const targetIndex = columnProjects.findIndex(p => p.id === targetProjectId);
+    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: targetPlazo });
+
+    const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
+    applyProjectOrder(updatedProjects);
+    await persistProjectOrder(updatedProjects);
   };
 
   const handleDropOnColumn = async (e: React.DragEvent, newPlazo: ProjectPlazo) => {
@@ -95,42 +95,28 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     const draggedProject = projects.find(p => p.id === draggedId);
     if (!draggedProject) return;
 
-    // Si ya está en la columna y se soltó en la columna (no sobre un proyecto específico), lo ponemos al final
     const columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== draggedId);
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
-
     columnProjects.push({ ...draggedProject, plazo: newPlazo });
 
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
-
-    // Actualización optimista de la UI
-    setProjects(prev => {
-      const newProjects = [...prev];
-      updatedProjects.forEach(up => {
-        const idx = newProjects.findIndex(p => p.id === up.id);
-        if (idx !== -1) newProjects[idx] = up;
-      });
-      return newProjects;
-    });
-
-    try {
-      await updateProjectOrder(updatedProjects);
-      router.refresh();
-    } catch (error) {
-      console.error('Error updating project orders:', error);
-      alert('Aviso: Hubo un problema guardando el orden. Asegúrate de que creaste el campo "order" (tipo Number) en la colección "projects" en PocketBase.');
-      setProjects(initialProjects);
-    }
+    applyProjectOrder(updatedProjects);
+    await persistProjectOrder(updatedProjects);
   };
 
   return (
     <div className="flex flex-col gap-6 pb-6 min-h-[500px]">
+      {orderError ? (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+          {orderError}
+        </p>
+      ) : null}
       {COLUMNS.map(column => {
         const columnProjects = projects
           .filter(p => (p.plazo || '') === column.id)
           .sort((a, b) => (a.order || 0) - (b.order || 0));
         return (
-          <div 
+          <div
             key={column.id}
             className={`w-full rounded-2xl p-6 border border-gray-200 dark:border-gray-700 transition-colors ${column.color}`}
             onDragOver={handleDragOver}
@@ -142,7 +128,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
                 {columnProjects.length} {columnProjects.length === 1 ? 'proyecto' : 'proyectos'}
               </span>
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 min-h-[120px]">
               {columnProjects.map(project => (
                 <div
