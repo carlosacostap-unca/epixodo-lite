@@ -65,6 +65,57 @@ test('creates a project in the Tareas board section', async ({ page }) => {
   await expect(tasksSection.getByRole('heading', { name: 'Trabajo suelto en E2E' })).toBeVisible();
 });
 
+test('creates a task card in Tareas from voice dictation', async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onend: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      onresult: ((event: Event) => void) | null = null;
+
+      abort() {}
+
+      start() {
+        window.setTimeout(() => {
+          this.onresult?.({
+            resultIndex: 0,
+            results: [
+              {
+                0: { transcript: 'Llamar al proveedor' },
+                isFinal: true,
+              },
+            ],
+          } as unknown as Event);
+          this.onend?.(new Event('end'));
+        }, 10);
+      }
+
+      stop() {
+        this.onend?.(new Event('end'));
+      }
+    }
+
+    window.SpeechRecognition = MockSpeechRecognition as never;
+  });
+
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Dictar tarea' }).click();
+  await expect(page.getByRole('textbox', { name: 'Texto dictado' })).toHaveValue('Llamar al proveedor');
+  await page.getByRole('button', { name: 'Guardar en Tareas' }).click();
+
+  await expect(
+    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(
+    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Llamar al proveedor' }),
+  ).toBeVisible();
+});
+
 test('moves a project from the touch long-press selector', async ({ page }) => {
   await page.goto('/');
 

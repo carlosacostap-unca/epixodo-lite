@@ -3,6 +3,7 @@ import { Project } from '@/types';
 import CreateProject from './components/CreateProject';
 import ProjectSearch from './components/ProjectSearch';
 import ProjectBoard from './components/ProjectBoard';
+import VoiceTaskCapture from './components/VoiceTaskCapture';
 
 export const revalidate = 0; 
 
@@ -33,8 +34,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
       </header>
       
-      <div className="mb-10">
+      <div className="mb-10 space-y-4">
         <CreateProject />
+        <VoiceTaskCapture />
       </div>
 
       {q && projects.length === 0 ? (
