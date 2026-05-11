@@ -1,4 +1,4 @@
-import { analyzeConversationIntent } from '@/lib/conversationIntent';
+import { analyzeConversationIntent, type ConversationAction } from '@/lib/conversationIntent';
 import { createE2ETask, deleteE2ETask, listE2EProjects, listE2ETasks, updateE2ETask } from '@/lib/e2eStore';
 import { pb } from '@/lib/pocketbase';
 import { formatPocketDateTime } from '@/lib/taskDates';
@@ -8,20 +8,61 @@ import type { Project, Task } from '@/types';
 
 const useE2EFixtures = process.env.NEXT_PUBLIC_E2E_MOCKS === '1';
 
-type PendingAction = {
-  action: 'delete_task';
-  taskId: string;
-  taskTitle: string;
+type PendingChoice = {
+  id: string;
+  title: string;
 };
+
+type PendingTaskAction = Extract<ConversationAction, 'complete_task' | 'assign_task' | 'update_due' | 'update_plazo' | 'rename_task' | 'delete_task'>;
+
+type PendingAction =
+  | {
+      action: 'delete_task';
+      taskId: string;
+      taskTitle: string;
+    }
+  | {
+      action: 'clarify_task';
+      originalAction: PendingTaskAction;
+      taskText: string;
+      projectId: string | null;
+      dueAt: string | null;
+      plazo: Task['plazo'] | null;
+      newTitle: string;
+      candidates: PendingChoice[];
+    }
+  | {
+      action: 'clarify_project';
+      taskId: string;
+      taskTitle: string;
+      candidates: PendingChoice[];
+    }
+  | {
+      action: 'clarify_due';
+      taskId: string;
+      taskTitle: string;
+    }
+  | {
+      action: 'clarify_plazo';
+      taskId: string;
+      taskTitle: string;
+    }
+  | {
+      action: 'clarify_title';
+      taskId: string;
+      taskTitle: string;
+    };
 
 type ConversationRequest = {
   message?: string;
   pendingAction?: PendingAction | null;
 };
 
-const defaultSuggestions = ['Crear tarea para mañana', 'Que tengo para hoy?', 'Tareas vencidas', 'Mostrar Inbox'];
+const defaultSuggestions = ['Crear tarea para manana', 'Que tengo para hoy?', 'Tareas vencidas', 'Mostrar Inbox'];
 const projectSuggestions = ['Listar proyectos', 'Mostrar Inbox', 'Que tengo para hoy?'];
 const confirmationSuggestions = ['Confirmar borrado', 'Cancelar'];
+const dueSuggestions = ['Hoy a las 9', 'Manana a las 9', 'Cancelar'];
+const plazoSuggestions = ['Corto', 'Mediano', 'Largo', 'Cancelar'];
 
 function bulletList(items: string[]) {
   return items.map((item) => `- ${item}`).join('\n');
@@ -73,6 +114,47 @@ function normalizeDueAt(value: string | null) {
   return date.toISOString().replace('T', ' ');
 }
 
+function dateToPocketDate(date: Date) {
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().replace('T', ' ');
+}
+
+function parseDueAt(message: string) {
+  const normalized = normalizeText(message);
+  const timeMatch = normalized.match(/(?:a las|tipo|sobre las)?\s*(\d{1,2})(?::(\d{2}))?/);
+  const hour = timeMatch ? Math.min(Number(timeMatch[1]), 23) : 9;
+  const minute = timeMatch?.[2] ? Math.min(Number(timeMatch[2]), 59) : 0;
+  const date = new Date();
+
+  if (normalized.includes('pasado manana')) {
+    date.setDate(date.getDate() + 2);
+  } else if (normalized.includes('manana')) {
+    date.setDate(date.getDate() + 1);
+  } else if (!normalized.includes('hoy')) {
+    const isoMatch = normalized.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+    const slashMatch = normalized.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);
+
+    if (isoMatch) {
+      date.setFullYear(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+    } else if (slashMatch) {
+      date.setFullYear(Number(slashMatch[3]), Number(slashMatch[2]) - 1, Number(slashMatch[1]));
+    } else {
+      return '';
+    }
+  }
+
+  date.setHours(hour, minute, 0, 0);
+  return dateToPocketDate(date);
+}
+
+function parsePlazo(message: string): Task['plazo'] | null {
+  const normalized = normalizeText(message);
+  if (normalized.includes('corto')) return 'Corto';
+  if (normalized.includes('mediano')) return 'Mediano';
+  if (normalized.includes('largo')) return 'Largo';
+  return null;
+}
+
 function findTask(intentTaskId: string | null, taskText: string, tasks: Task[]) {
   if (intentTaskId) {
     const byId = tasks.find((task) => task.id === intentTaskId);
@@ -80,7 +162,60 @@ function findTask(intentTaskId: string | null, taskText: string, tasks: Task[]) 
   }
 
   const normalizedText = normalizeText(taskText);
-  return tasks.find((task) => normalizedText && normalizeText(task.title).includes(normalizedText)) || null;
+  return tasks.find((task) => normalizedText && taskTitleMatches(task, normalizedText)) || null;
+}
+
+function taskTitleMatches(task: Task, normalizedText: string) {
+  const normalizedTitle = normalizeText(task.title);
+  return normalizedTitle.includes(normalizedText) || normalizedText.includes(normalizedTitle);
+}
+
+function getSearchTokens(value: string) {
+  const ignored = new Set(['asigna', 'asignar', 'borra', 'borrar', 'cambia', 'completa', 'completar', 'de', 'el', 'la', 'los', 'marca', 'plazo', 'tarea', 'termina', 'vence']);
+  return normalizeText(value)
+    .split(/[^a-z0-9]+/i)
+    .filter((token) => token.length >= 4 && !ignored.has(token));
+}
+
+function rankTaskCandidates(message: string, taskText: string, tasks: Task[]) {
+  const tokens = getSearchTokens(`${message} ${taskText}`);
+  const scored = tasks
+    .map((task) => {
+      const title = normalizeText(task.title);
+      const score = tokens.filter((token) => title.includes(token)).length;
+      return { task, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || a.task.created.localeCompare(b.task.created));
+
+  const candidates = scored.length > 0 ? scored.map(({ task }) => task) : tasks.filter((task) => !task.is_completed);
+  return candidates.slice(0, 4).map((task) => ({ id: task.id, title: task.title }));
+}
+
+function findChoice(message: string, candidates: PendingChoice[]) {
+  const normalized = normalizeText(message);
+  const ordinalMap: Record<string, number> = {
+    '1': 0,
+    primera: 0,
+    primero: 0,
+    '2': 1,
+    segunda: 1,
+    segundo: 1,
+    '3': 2,
+    tercera: 2,
+    tercero: 2,
+    '4': 3,
+    cuarta: 3,
+    cuarto: 3,
+  };
+  const ordinal = Object.entries(ordinalMap).find(([key]) => normalized.includes(key))?.[1];
+  if (ordinal !== undefined && candidates[ordinal]) return candidates[ordinal];
+
+  return (
+    candidates.find((candidate) => normalizeText(candidate.title) === normalized) ||
+    candidates.find((candidate) => normalizeText(candidate.title).includes(normalized) || normalized.includes(normalizeText(candidate.title))) ||
+    null
+  );
 }
 
 function projectTitle(projectId: string, projects: Project[]) {
@@ -94,8 +229,195 @@ function formatTask(task: Task, projects: Project[]) {
   return `${task.title}${project}${due}${plazo}`;
 }
 
-function missingTaskReply() {
-  return 'No pude identificar que tarea queres modificar. Proba nombrandola como aparece en la lista.';
+function taskClarification(action: PendingTaskAction, message: string, taskText: string, tasks: Task[], overrides: Partial<PendingAction> = {}) {
+  const candidates = rankTaskCandidates(message, taskText, tasks);
+  if (candidates.length === 0) {
+    return Response.json({ reply: 'No encontre tareas para esa operacion. Proba nombrando la tarea como aparece en la lista.', suggestions: defaultSuggestions });
+  }
+
+  return Response.json({
+    reply: 'No estoy seguro de que tarea queres usar. Elegi una de estas.',
+    suggestions: candidates.map((candidate) => candidate.title),
+    pendingAction: {
+      action: 'clarify_task',
+      originalAction: action,
+      taskText,
+      projectId: null,
+      dueAt: null,
+      plazo: null,
+      newTitle: '',
+      candidates,
+      ...overrides,
+    },
+  });
+}
+
+function projectClarification(task: Task, projects: Project[]) {
+  const candidates = projects.slice(0, 4).map((project) => ({ id: project.id, title: project.title }));
+  if (candidates.length === 0) {
+    return Response.json({ reply: 'Necesito un proyecto, pero todavia no hay proyectos disponibles.', suggestions: defaultSuggestions });
+  }
+
+  return Response.json({
+    reply: `A que proyecto queres asignar "${task.title}"?`,
+    suggestions: candidates.map((candidate) => candidate.title),
+    pendingAction: {
+      action: 'clarify_project',
+      taskId: task.id,
+      taskTitle: task.title,
+      candidates,
+    },
+  });
+}
+
+async function applyTaskAction(action: PendingTaskAction, task: Task, data: Pick<PendingAction & { projectId?: string | null; dueAt?: string | null; plazo?: Task['plazo'] | null; newTitle?: string }, 'projectId' | 'dueAt' | 'plazo' | 'newTitle'>, projects: Project[]) {
+  if (action === 'complete_task') {
+    await updateTask({ id: task.id, is_completed: true });
+    return Response.json({ reply: `Listo, marque "${task.title}" como completada.`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  if (action === 'assign_task') {
+    const project = data.projectId ? projects.find((item) => item.id === data.projectId) : null;
+    if (!project) return projectClarification(task, projects);
+
+    await updateTask({ id: task.id, project: project.id });
+    return Response.json({ reply: `Listo, asigne "${task.title}" a ${project.title}.`, suggestions: projectSuggestions, pendingAction: null });
+  }
+
+  if (action === 'update_due') {
+    const dueAt = normalizeDueAt(data.dueAt || '');
+    if (!dueAt) {
+      return Response.json({
+        reply: `Cuando vence "${task.title}"?`,
+        suggestions: dueSuggestions,
+        pendingAction: { action: 'clarify_due', taskId: task.id, taskTitle: task.title },
+      });
+    }
+
+    await updateTask({ id: task.id, due_at: dueAt });
+    return Response.json({ reply: `Listo, "${task.title}" vence ${formatPocketDateTime(dueAt)}.`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  if (action === 'update_plazo') {
+    if (!data.plazo) {
+      return Response.json({
+        reply: `Que plazo queres para "${task.title}"?`,
+        suggestions: plazoSuggestions,
+        pendingAction: { action: 'clarify_plazo', taskId: task.id, taskTitle: task.title },
+      });
+    }
+
+    await updateTask({ id: task.id, plazo: data.plazo });
+    return Response.json({ reply: `Listo, cambie "${task.title}" a plazo ${data.plazo}.`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  if (action === 'rename_task') {
+    if (!data.newTitle) {
+      return Response.json({
+        reply: `Que titulo nuevo queres para "${task.title}"?`,
+        suggestions: ['Cancelar'],
+        pendingAction: { action: 'clarify_title', taskId: task.id, taskTitle: task.title },
+      });
+    }
+
+    await updateTask({ id: task.id, title: data.newTitle });
+    return Response.json({ reply: `Listo, renombre "${task.title}" como "${data.newTitle}".`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  const pendingAction: PendingAction = { action: 'delete_task', taskId: task.id, taskTitle: task.title };
+  return Response.json({
+    reply: `Antes de borrar "${task.title}", necesito confirmacion.`,
+    suggestions: confirmationSuggestions,
+    pendingAction,
+  });
+}
+
+async function handlePendingAction(pendingAction: PendingAction, message: string, tasks: Task[], projects: Project[]) {
+  if (isCancellation(message)) {
+    return Response.json({ reply: 'Ok, no hice cambios.', suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  if (pendingAction.action === 'delete_task') {
+    if (isConfirmation(message)) {
+      await deleteTask(pendingAction.taskId);
+      return Response.json({ reply: `Listo, borre "${pendingAction.taskTitle}".`, suggestions: defaultSuggestions, pendingAction: null });
+    }
+
+    return Response.json({
+      reply: `Necesito que confirmes si queres borrar "${pendingAction.taskTitle}".`,
+      suggestions: confirmationSuggestions,
+      pendingAction,
+    });
+  }
+
+  if (pendingAction.action === 'clarify_task') {
+    const choice = findChoice(message, pendingAction.candidates);
+    const task = choice ? tasks.find((item) => item.id === choice.id) : null;
+
+    if (!task) {
+      return Response.json({
+        reply: 'No pude reconocer cual de esas tareas elegiste. Proba tocando uno de los botones.',
+        suggestions: pendingAction.candidates.map((candidate) => candidate.title),
+        pendingAction,
+      });
+    }
+
+    return applyTaskAction(
+      pendingAction.originalAction,
+      task,
+      {
+        projectId: pendingAction.projectId,
+        dueAt: pendingAction.dueAt,
+        plazo: pendingAction.plazo,
+        newTitle: pendingAction.newTitle,
+      },
+      projects,
+    );
+  }
+
+  if (pendingAction.action === 'clarify_project') {
+    const choice = findChoice(message, pendingAction.candidates);
+    const project = choice ? projects.find((item) => item.id === choice.id) : null;
+
+    if (!project) {
+      return Response.json({
+        reply: `No pude reconocer el proyecto para "${pendingAction.taskTitle}". Elegi uno de estos.`,
+        suggestions: pendingAction.candidates.map((candidate) => candidate.title),
+        pendingAction,
+      });
+    }
+
+    await updateTask({ id: pendingAction.taskId, project: project.id });
+    return Response.json({ reply: `Listo, asigne "${pendingAction.taskTitle}" a ${project.title}.`, suggestions: projectSuggestions, pendingAction: null });
+  }
+
+  if (pendingAction.action === 'clarify_due') {
+    const dueAt = parseDueAt(message);
+    if (!dueAt) {
+      return Response.json({ reply: `Necesito una fecha para "${pendingAction.taskTitle}".`, suggestions: dueSuggestions, pendingAction });
+    }
+
+    await updateTask({ id: pendingAction.taskId, due_at: dueAt });
+    return Response.json({ reply: `Listo, "${pendingAction.taskTitle}" vence ${formatPocketDateTime(dueAt)}.`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  if (pendingAction.action === 'clarify_plazo') {
+    const plazo = parsePlazo(message);
+    if (!plazo) {
+      return Response.json({ reply: `Necesito saber si "${pendingAction.taskTitle}" va en Corto, Mediano o Largo.`, suggestions: plazoSuggestions, pendingAction });
+    }
+
+    await updateTask({ id: pendingAction.taskId, plazo });
+    return Response.json({ reply: `Listo, cambie "${pendingAction.taskTitle}" a plazo ${plazo}.`, suggestions: defaultSuggestions, pendingAction: null });
+  }
+
+  const newTitle = message.trim();
+  if (!newTitle) {
+    return Response.json({ reply: `Que titulo nuevo queres para "${pendingAction.taskTitle}"?`, suggestions: ['Cancelar'], pendingAction });
+  }
+
+  await updateTask({ id: pendingAction.taskId, title: newTitle });
+  return Response.json({ reply: `Listo, renombre "${pendingAction.taskTitle}" como "${newTitle}".`, suggestions: defaultSuggestions, pendingAction: null });
 }
 
 export async function POST(request: Request) {
@@ -107,24 +429,12 @@ export async function POST(request: Request) {
       return Response.json({ reply: 'Decime que queres hacer con tus tareas.', suggestions: defaultSuggestions }, { status: 400 });
     }
 
-    if (body.pendingAction?.action === 'delete_task') {
-      if (isCancellation(message)) {
-        return Response.json({ reply: `Ok, mantuve "${body.pendingAction.taskTitle}".`, suggestions: defaultSuggestions, pendingAction: null });
-      }
+    const [projects, tasks] = await Promise.all([listProjects(), listTasks()]);
 
-      if (isConfirmation(message)) {
-        await deleteTask(body.pendingAction.taskId);
-        return Response.json({ reply: `Listo, borre "${body.pendingAction.taskTitle}".`, suggestions: defaultSuggestions, pendingAction: null });
-      }
-
-      return Response.json({
-        reply: `Necesito que confirmes si queres borrar "${body.pendingAction.taskTitle}".`,
-        suggestions: confirmationSuggestions,
-        pendingAction: body.pendingAction,
-      });
+    if (body.pendingAction) {
+      return handlePendingAction(body.pendingAction, message, tasks, projects);
     }
 
-    const [projects, tasks] = await Promise.all([listProjects(), listTasks()]);
     const intent = await analyzeConversationIntent(message, projects, tasks);
 
     if (intent.action === 'create_task') {
@@ -164,7 +474,7 @@ export async function POST(request: Request) {
         todayTasks.length > 0
           ? `Para hoy tenes:\n${bulletList(todayTasks.map((task) => formatTask(task, projects)))}`
           : 'No tenes tareas vencidas ni marcadas para hoy.';
-      return Response.json({ reply, suggestions: ['Tareas vencidas', 'Mostrar Inbox', 'Crear tarea para mañana'] });
+      return Response.json({ reply, suggestions: ['Tareas vencidas', 'Mostrar Inbox', 'Crear tarea para manana'] });
     }
 
     if (intent.action === 'list_overdue') {
@@ -173,7 +483,7 @@ export async function POST(request: Request) {
         groups.overdue.length > 0
           ? `Tenes estas tareas vencidas:\n${bulletList(groups.overdue.map((task) => formatTask(task, projects)))}`
           : 'No tenes tareas vencidas.';
-      return Response.json({ reply, suggestions: ['Que tengo para hoy?', 'Mostrar Inbox', 'Crear tarea para mañana'] });
+      return Response.json({ reply, suggestions: ['Que tengo para hoy?', 'Mostrar Inbox', 'Crear tarea para manana'] });
     }
 
     if (intent.action === 'list_inbox') {
@@ -190,84 +500,61 @@ export async function POST(request: Request) {
     if (intent.action === 'complete_task') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
       if (!task) {
-        return Response.json({ reply: missingTaskReply(), suggestions: defaultSuggestions });
+        return taskClarification('complete_task', message, intent.taskText, tasks);
       }
 
-      await updateTask({ id: task.id, is_completed: true });
-      return Response.json({ reply: `Listo, marque "${task.title}" como completada.`, suggestions: defaultSuggestions });
+      return applyTaskAction('complete_task', task, {}, projects);
     }
 
     if (intent.action === 'assign_task') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
-      const project = intent.projectId ? projects.find((item) => item.id === intent.projectId) : null;
-
-      if (!task || !project) {
-        return Response.json({ reply: 'Necesito reconocer una tarea y un proyecto para asignarla. Proba con "asigna [tarea] a [proyecto]".', suggestions: projectSuggestions });
+      if (!task) {
+        return taskClarification('assign_task', message, intent.taskText, tasks, { projectId: intent.projectId });
       }
 
-      await updateTask({ id: task.id, project: project.id });
-      return Response.json({ reply: `Listo, asigne "${task.title}" a ${project.title}.`, suggestions: projectSuggestions });
+      return applyTaskAction('assign_task', task, { projectId: intent.projectId }, projects);
     }
 
     if (intent.action === 'update_due') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
-      const dueAt = normalizeDueAt(intent.dueAt);
+      const dueAt = normalizeDueAt(intent.dueAt) || parseDueAt(message);
 
       if (!task) {
-        return Response.json({ reply: missingTaskReply(), suggestions: defaultSuggestions });
+        return taskClarification('update_due', message, intent.taskText, tasks, { dueAt });
       }
 
-      if (!dueAt) {
-        return Response.json({ reply: `Reconoci la tarea "${task.title}", pero necesito una fecha de vencimiento. Por ejemplo: "vence mañana a las 9".`, suggestions: defaultSuggestions });
-      }
-
-      await updateTask({ id: task.id, due_at: dueAt });
-      return Response.json({ reply: `Listo, "${task.title}" vence ${formatPocketDateTime(dueAt)}.`, suggestions: defaultSuggestions });
+      return applyTaskAction('update_due', task, { dueAt }, projects);
     }
 
     if (intent.action === 'update_plazo') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
+      const plazo = intent.plazo || parsePlazo(message);
 
       if (!task) {
-        return Response.json({ reply: missingTaskReply(), suggestions: defaultSuggestions });
+        return taskClarification('update_plazo', message, intent.taskText, tasks, { plazo });
       }
 
-      if (!intent.plazo) {
-        return Response.json({ reply: `Reconoci la tarea "${task.title}", pero necesito saber si el plazo es Corto, Mediano o Largo.`, suggestions: defaultSuggestions });
-      }
-
-      await updateTask({ id: task.id, plazo: intent.plazo });
-      return Response.json({ reply: `Listo, cambie "${task.title}" a plazo ${intent.plazo}.`, suggestions: defaultSuggestions });
+      return applyTaskAction('update_plazo', task, { plazo }, projects);
     }
 
     if (intent.action === 'rename_task') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
 
       if (!task) {
-        return Response.json({ reply: missingTaskReply(), suggestions: defaultSuggestions });
+        return taskClarification('rename_task', message, intent.taskText, tasks, { newTitle: intent.newTitle });
       }
 
-      if (!intent.newTitle) {
-        return Response.json({ reply: `Reconoci la tarea "${task.title}", pero necesito el titulo nuevo. Proba con: renombra ${task.title} como "nuevo titulo".`, suggestions: defaultSuggestions });
-      }
-
-      await updateTask({ id: task.id, title: intent.newTitle });
-      return Response.json({ reply: `Listo, renombre "${task.title}" como "${intent.newTitle}".`, suggestions: defaultSuggestions });
+      return applyTaskAction('rename_task', task, { newTitle: intent.newTitle }, projects);
     }
 
     if (intent.action === 'delete_task') {
       const task = findTask(intent.taskId, intent.taskText || message, tasks);
 
       if (!task) {
-        return Response.json({ reply: missingTaskReply(), suggestions: defaultSuggestions });
+        return taskClarification('delete_task', message, intent.taskText, tasks);
       }
 
-      const pendingAction: PendingAction = { action: 'delete_task', taskId: task.id, taskTitle: task.title };
-      return Response.json({
-        reply: `Antes de borrar "${task.title}", necesito confirmacion.`,
-        suggestions: confirmationSuggestions,
-        pendingAction,
-      });
+      return applyTaskAction('delete_task', task, {}, projects);
     }
 
     return Response.json({

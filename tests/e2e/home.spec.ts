@@ -120,6 +120,84 @@ test('confirms before deleting a task through the conversational API', async ({ 
   await expect(page.getByText('Eliminar prueba conversacional')).toHaveCount(0);
 });
 
+test('asks which task to use when a conversational command is ambiguous', async ({ request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Ordenar facturas',
+        description: '',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Revisar facturas',
+        description: '',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+
+  const ambiguous = await request.post('/api/conversation', {
+    data: { message: 'completa facturas' },
+  });
+  const ambiguousBody = await ambiguous.json();
+  expect(ambiguousBody.reply).toMatch(/No estoy seguro/i);
+  expect(ambiguousBody.suggestions).toContain('Ordenar facturas');
+  expect(ambiguousBody.suggestions).toContain('Revisar facturas');
+
+  const clarified = await request.post('/api/conversation', {
+    data: { message: 'Ordenar facturas', pendingAction: ambiguousBody.pendingAction },
+  });
+  const clarifiedBody = await clarified.json();
+  expect(clarifiedBody.reply).toMatch(/marque "Ordenar facturas" como completada/i);
+});
+
+test('asks which project to use when assigning from conversation without a project', async ({ page, request }) => {
+  await request.post('/api/e2e', {
+    data: {
+      action: 'createTask',
+      task: {
+        title: 'Ordenar facturas',
+        description: '',
+        is_completed: false,
+        project: '',
+        realization_at: '',
+        due_at: '',
+        plazo: '',
+      },
+    },
+  });
+
+  const missingProject = await request.post('/api/conversation', {
+    data: { message: 'asigna Ordenar facturas' },
+  });
+  const missingProjectBody = await missingProject.json();
+  expect(missingProjectBody.reply).toMatch(/A que proyecto/i);
+  expect(missingProjectBody.suggestions).toContain('Lanzamiento del producto');
+
+  const clarified = await request.post('/api/conversation', {
+    data: { message: 'Lanzamiento del producto', pendingAction: missingProjectBody.pendingAction },
+  });
+  const clarifiedBody = await clarified.json();
+  expect(clarifiedBody.reply).toMatch(/asigne "Ordenar facturas" a Lanzamiento del producto/i);
+
+  await page.goto('/projects/e2e-project-launch');
+  await expect(page.getByText('Ordenar facturas')).toBeVisible();
+});
+
 test('filters projects and opens a fixture project detail', async ({ page }) => {
   await page.goto('/?view=projects');
 

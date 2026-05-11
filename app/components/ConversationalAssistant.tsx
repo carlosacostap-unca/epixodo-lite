@@ -15,9 +15,8 @@ type TranscriptionResponse = {
 };
 
 type PendingAction = {
-  action: 'delete_task';
-  taskId: string;
-  taskTitle: string;
+  action: string;
+  [key: string]: unknown;
 };
 
 type ScreenState = 'idle' | 'processing' | 'result';
