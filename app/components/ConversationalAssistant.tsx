@@ -3,12 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type Message = {
-  id: string;
-  role: 'assistant' | 'user';
-  text: string;
-};
-
 type ConversationResponse = {
   reply?: string;
   suggestions?: string[];
@@ -26,8 +20,10 @@ type PendingAction = {
   taskTitle: string;
 };
 
+type ScreenState = 'idle' | 'processing' | 'result';
+
 const AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
-const defaultSuggestions = ['Crear tarea para mañana', 'Que tengo para hoy?', 'Tareas vencidas', 'Mostrar Inbox'];
+const defaultSuggestions = ['Crear tarea para manana', 'Que tengo para hoy?', 'Tareas vencidas', 'Mostrar Inbox'];
 
 function getSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
@@ -42,23 +38,13 @@ function getAudioFileName(mimeType: string) {
   return 'conversation.webm';
 }
 
-function nextMessageId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 export default function ConversationalAssistant() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      text: 'Decime que queres hacer con tus tareas.',
-    },
-  ]);
-  const [input, setInput] = useState('');
+  const [screenState, setScreenState] = useState<ScreenState>('idle');
+  const [reply, setReply] = useState('Decime que queres hacer con tus tareas.');
+  const [lastRequest, setLastRequest] = useState('');
   const [suggestions, setSuggestions] = useState(defaultSuggestions);
   const [isSupported, setIsSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -86,12 +72,11 @@ export default function ConversationalAssistant() {
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || screenState === 'processing') return;
 
-    setInput('');
-    setIsLoading(true);
+    setLastRequest(trimmed);
+    setScreenState('processing');
     setStatus('Procesando');
-    setMessages((current) => [...current, { id: nextMessageId(), role: 'user', text: trimmed }]);
 
     try {
       const response = await fetch('/api/conversation', {
@@ -100,29 +85,26 @@ export default function ConversationalAssistant() {
         body: JSON.stringify({ message: trimmed, pendingAction }),
       });
       const data = (await response.json()) as ConversationResponse;
-      const reply = data.reply || 'No pude procesar el mensaje.';
+      const nextReply = data.reply || 'No pude procesar el mensaje.';
 
       if (!response.ok) {
-        throw new Error(reply);
+        throw new Error(nextReply);
       }
 
-      setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: reply }]);
+      setReply(nextReply);
       setSuggestions(data.suggestions?.length ? data.suggestions : defaultSuggestions);
       setPendingAction(data.pendingAction || null);
       router.refresh();
     } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { id: nextMessageId(), role: 'assistant', text: error instanceof Error ? error.message : 'No pude procesar el mensaje.' },
-      ]);
+      setReply(error instanceof Error ? error.message : 'No pude procesar el mensaje.');
     } finally {
-      setIsLoading(false);
+      setScreenState('result');
       setStatus('');
     }
   };
 
   const transcribeAudio = async (audioBlob: Blob, mimeType: string) => {
-    setIsLoading(true);
+    setScreenState('processing');
     setStatus('Transcribiendo');
 
     try {
@@ -143,22 +125,20 @@ export default function ConversationalAssistant() {
         throw new Error('La transcripcion quedo vacia.');
       }
 
-      setIsLoading(false);
-      setStatus('');
       await sendMessage(transcript);
     } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { id: nextMessageId(), role: 'assistant', text: error instanceof Error ? error.message : 'No pude transcribir el audio.' },
-      ]);
-      setIsLoading(false);
+      setReply(error instanceof Error ? error.message : 'No pude transcribir el audio.');
+      setScreenState('result');
       setStatus('');
     }
   };
 
   const startRecording = async () => {
+    if (screenState === 'processing') return;
+
     if (typeof navigator.mediaDevices?.getUserMedia !== 'function' || !('MediaRecorder' in window)) {
-      setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: 'La grabacion no esta disponible en este navegador.' }]);
+      setReply('La grabacion no esta disponible en este navegador.');
+      setScreenState('result');
       return;
     }
 
@@ -181,7 +161,8 @@ export default function ConversationalAssistant() {
       recorder.onerror = () => {
         setIsRecording(false);
         stopStream();
-        setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: 'No se pudo grabar el audio.' }]);
+        setReply('No se pudo grabar el audio.');
+        setScreenState('result');
       };
 
       recorder.onstop = () => {
@@ -191,7 +172,8 @@ export default function ConversationalAssistant() {
         const recordingMimeType = recorder.mimeType || mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: recordingMimeType });
         if (audioBlob.size === 0) {
-          setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: 'No se recibio audio para transcribir.' }]);
+          setReply('No se recibio audio para transcribir.');
+          setScreenState('result');
           return;
         }
 
@@ -201,10 +183,12 @@ export default function ConversationalAssistant() {
       recorder.start();
       setIsRecording(true);
       setStatus('Grabando');
+      setScreenState('idle');
     } catch (error) {
       console.error('Conversation microphone error:', error);
       stopStream();
-      setMessages((current) => [...current, { id: nextMessageId(), role: 'assistant', text: 'No se pudo acceder al microfono.' }]);
+      setReply('No se pudo acceder al microfono.');
+      setScreenState('result');
     }
   };
 
@@ -215,79 +199,127 @@ export default function ConversationalAssistant() {
     }
   };
 
+  const isBusy = screenState === 'processing';
+
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-950 dark:text-white">Conversar</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-300">Habla o escribe para operar tus tareas.</p>
-        </div>
-        {status ? <p role="status" className="text-sm font-semibold text-blue-600 dark:text-blue-300">{status}</p> : null}
-      </div>
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <style jsx>{`
+        @keyframes conversational-reveal {
+          from {
+            clip-path: inset(0 100% 0 0);
+            opacity: 0;
+            transform: translateX(-10px);
+          }
+          to {
+            clip-path: inset(0 0 0 0);
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
 
-      <div className="mt-4 flex max-h-[420px] flex-col gap-3 overflow-y-auto rounded-lg bg-gray-50 p-3 dark:bg-gray-950">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`max-w-[86%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-6 ${
-              message.role === 'user'
-                ? 'ml-auto bg-blue-600 text-white'
-                : 'mr-auto border border-gray-200 bg-white text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
-            }`}
-          >
-            {message.text}
+        @keyframes conversational-pulse {
+          0%,
+          100% {
+            transform: scale(1);
+            opacity: 0.72;
+          }
+          50% {
+            transform: scale(1.08);
+            opacity: 0.28;
+          }
+        }
+
+        .reply-reveal {
+          animation: conversational-reveal 520ms ease-out both;
+        }
+
+        .voice-pulse {
+          animation: conversational-pulse 1.4s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .reply-reveal,
+          .voice-pulse {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      <div className="min-h-[520px] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[480px] max-w-3xl flex-col justify-between gap-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-gray-950 dark:text-white">Conversar</h2>
+              {lastRequest ? <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">Ultimo pedido: {lastRequest}</p> : null}
+            </div>
+            {status ? (
+              <p role="status" className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                {status}
+              </p>
+            ) : null}
           </div>
-        ))}
-      </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion}
-            type="button"
-            onClick={() => void sendMessage(suggestion)}
-            disabled={isLoading || isRecording}
-            className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            {suggestion}
-          </button>
-        ))}
-      </div>
+          <div className="flex flex-1 items-center justify-center">
+            {screenState === 'processing' ? (
+              <div className="w-full text-center" aria-live="polite">
+                <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-blue-600/10">
+                  <span className="voice-pulse h-16 w-16 rounded-full bg-blue-600" />
+                </div>
+                <p className="text-2xl font-extrabold text-gray-950 dark:text-white">Procesando</p>
+              </div>
+            ) : screenState === 'result' ? (
+              <div key={reply} className="reply-reveal w-full" aria-live="polite">
+                <p className="whitespace-pre-wrap text-balance text-2xl font-bold leading-tight text-gray-950 dark:text-white sm:text-4xl">
+                  {reply}
+                </p>
+              </div>
+            ) : (
+              <div className="w-full text-center">
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={!isSupported && !isRecording}
+                  aria-pressed={isRecording}
+                  className="mx-auto flex aspect-square w-52 max-w-[72vw] flex-col items-center justify-center rounded-full bg-gray-950 text-white shadow-xl shadow-gray-950/20 transition hover:-translate-y-0.5 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 sm:w-64"
+                >
+                  <span className="text-sm font-bold uppercase tracking-wide">{isRecording ? 'Grabando' : 'Presionar'}</span>
+                  <span className="mt-2 text-4xl font-black sm:text-5xl">{isRecording ? 'Detener' : 'Hablar'}</span>
+                </button>
+                {!isSupported ? <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">Microfono no disponible</p> : null}
+              </div>
+            )}
+          </div>
 
-      <form
-        className="mt-4 flex flex-col gap-2 sm:flex-row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void sendMessage(input);
-        }}
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Escribe una operacion..."
-          aria-label="Mensaje conversacional"
-          disabled={isLoading || isRecording}
-          className="min-h-11 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-950 outline-none transition focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-        />
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={!isSupported || (isLoading && !isRecording)}
-            className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
-          >
-            {isRecording ? 'Detener' : 'Hablar'}
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading || isRecording || !input.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Enviar
-          </button>
+          <div className="space-y-4">
+            {screenState === 'result' ? (
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={!isSupported || isBusy}
+                  className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+                >
+                  {isRecording ? 'Detener' : 'Hablar de nuevo'}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap justify-center gap-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => void sendMessage(suggestion)}
+                  disabled={isBusy || isRecording}
+                  className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </section>
   );
 }

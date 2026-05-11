@@ -27,13 +27,13 @@ test('creates a task from conversational mode', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Conversar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Conversar' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('Crear tarea llamar al contador');
-  await page.getByRole('button', { name: 'Enviar' }).click();
+  await expect(page.getByRole('button', { name: 'Hablar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Crear tarea para manana' }).click();
 
   await expect(page.getByText(/cree la tarea/i)).toBeVisible();
 
   await page.goto('/?view=inbox');
-  await expect(page.getByText('llamar al contador')).toBeVisible();
+  await expect(page.getByText('manana')).toBeVisible();
 });
 
 test('answers today task questions from conversational mode', async ({ page, request }) => {
@@ -61,7 +61,7 @@ test('answers today task questions from conversational mode', async ({ page, req
   await expect(page.getByText('Conversar sobre lo de hoy')).toBeVisible();
 });
 
-test('updates task metadata from conversational mode', async ({ page, request }) => {
+test('updates task metadata through the conversational API', async ({ page, request }) => {
   await request.post('/api/e2e', {
     data: {
       action: 'createTask',
@@ -77,19 +77,18 @@ test('updates task metadata from conversational mode', async ({ page, request })
     },
   });
 
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('cambia plazo de Ordenar facturas a Corto');
-  await page.getByRole('button', { name: 'Enviar' }).click();
-
-  await expect(page.getByText(/plazo Corto/i)).toBeVisible();
+  const response = await request.post('/api/conversation', {
+    data: { message: 'cambia plazo de Ordenar facturas a Corto' },
+  });
+  const body = await response.json();
+  expect(body.reply).toMatch(/plazo Corto/i);
 
   await page.goto('/?view=inbox');
   await expect(page.getByText('Ordenar facturas')).toBeVisible();
   await expect(page.getByText('Plazo: Corto')).toBeVisible();
 });
 
-test('confirms before deleting a task from conversational mode', async ({ page, request }) => {
+test('confirms before deleting a task through the conversational API', async ({ page, request }) => {
   await request.post('/api/e2e', {
     data: {
       action: 'createTask',
@@ -105,14 +104,17 @@ test('confirms before deleting a task from conversational mode', async ({ page, 
     },
   });
 
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Conversar', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Mensaje conversacional' }).fill('borra tarea Eliminar prueba conversacional');
-  await page.getByRole('button', { name: 'Enviar' }).click();
+  const requestDelete = await request.post('/api/conversation', {
+    data: { message: 'borra tarea Eliminar prueba conversacional' },
+  });
+  const deleteBody = await requestDelete.json();
+  expect(deleteBody.reply).toMatch(/necesito confirmacion/i);
 
-  await expect(page.getByText(/necesito confirmacion/i)).toBeVisible();
-  await page.getByRole('button', { name: 'Confirmar borrado' }).click();
-  await expect(page.getByText(/borre "Eliminar prueba conversacional"/i)).toBeVisible();
+  const confirmDelete = await request.post('/api/conversation', {
+    data: { message: 'Confirmar borrado', pendingAction: deleteBody.pendingAction },
+  });
+  const confirmBody = await confirmDelete.json();
+  expect(confirmBody.reply).toMatch(/borre "Eliminar prueba conversacional"/i);
 
   await page.goto('/?view=inbox');
   await expect(page.getByText('Eliminar prueba conversacional')).toHaveCount(0);
