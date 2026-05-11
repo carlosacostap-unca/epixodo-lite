@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Project } from '@/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -16,17 +16,52 @@ const COLUMNS = [
   { id: '', title: 'Sin plazo', color: 'bg-gray-50 dark:bg-gray-800/50', headerColor: 'text-gray-600 dark:text-gray-400' }
 ] as const;
 
+const longPressDelay = 550;
 const orderErrorMessage = 'No se pudo guardar el nuevo orden. Revisa la conexión e inténtalo de nuevo.';
 
 export default function ProjectBoard({ initialProjects }: { initialProjects: Project[] }) {
   const [projects, setProjects] = useState(initialProjects);
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
+  const [moveProject, setMoveProject] = useState<Project | null>(null);
+  const [isMovingProject, setIsMovingProject] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const moveDialogTitleId = useId();
+  const moveDialogDescriptionId = useId();
+  const longPressTimerRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
     setProjects(initialProjects);
   }, [initialProjects]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!moveProject) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isMovingProject) {
+        setMoveProject(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMovingProject, moveProject]);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent, projectId: string) => {
     e.dataTransfer.setData('projectId', projectId);
@@ -63,6 +98,53 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
       });
       return newProjects;
     });
+  };
+
+  const moveProjectToColumn = async (project: Project, newPlazo: ProjectPlazo) => {
+    if ((project.plazo || '') === newPlazo) {
+      setMoveProject(null);
+      return;
+    }
+
+    setIsMovingProject(true);
+    const columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== project.id);
+    columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
+    columnProjects.push({ ...project, plazo: newPlazo });
+
+    const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
+    applyProjectOrder(updatedProjects);
+    await persistProjectOrder(updatedProjects);
+    setIsMovingProject(false);
+    setMoveProject(null);
+  };
+
+  const handleTouchPointerDown = (event: React.PointerEvent, project: Project) => {
+    if (event.pointerType === 'mouse') return;
+
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      suppressNextClickRef.current = true;
+      setMoveProject(project);
+      setDraggedProjectId(null);
+    }, longPressDelay);
+  };
+
+  const handleTouchPointerEnd = () => {
+    clearLongPressTimer();
+
+    if (suppressNextClickRef.current) {
+      window.setTimeout(() => {
+        suppressNextClickRef.current = false;
+      }, 500);
+    }
+  };
+
+  const handleProjectLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!suppressNextClickRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextClickRef.current = false;
   };
 
   const handleDropOnProject = async (e: React.DragEvent, targetProjectId: string) => {
@@ -119,6 +201,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
         return (
           <div
             key={column.id}
+            data-testid={`project-section-${column.id || 'sin-plazo'}`}
             className={`w-full rounded-2xl p-6 border border-gray-200 dark:border-gray-700 transition-colors ${column.color}`}
             onDragOver={handleDragOver}
             onDrop={(e) => handleDropOnColumn(e, column.id)}
@@ -142,9 +225,14 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDropOnProject(e, project.id)}
-                  className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative flex flex-col h-full ${draggedProjectId === project.id ? 'opacity-50' : 'opacity-100'}`}
+                  onPointerDown={(e) => handleTouchPointerDown(e, project)}
+                  onPointerMove={handleTouchPointerEnd}
+                  onPointerUp={handleTouchPointerEnd}
+                  onPointerCancel={handleTouchPointerEnd}
+                  data-testid={`project-card-${project.id}`}
+                  className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative flex flex-col h-full select-none ${draggedProjectId === project.id ? 'opacity-50' : 'opacity-100'}`}
                 >
-                  <Link href={`/projects/${project.id}`} className="flex-1 flex flex-col">
+                  <Link href={`/projects/${project.id}`} onClick={handleProjectLinkClick} className="flex-1 flex flex-col">
                     <h4 className="font-semibold text-lg text-gray-900 dark:text-white mb-2 leading-tight">{project.title}</h4>
                     <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 mb-4 flex-1 leading-relaxed">
                       {project.description || 'Sin descripción'}
@@ -172,6 +260,57 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
           </div>
         );
       })}
+      {moveProject ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/50 px-4 py-6 backdrop-blur-sm sm:items-center">
+          <button
+            type="button"
+            aria-label="Cerrar selector de sección"
+            className="absolute inset-0 cursor-default"
+            disabled={isMovingProject}
+            onClick={() => setMoveProject(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={moveDialogTitleId}
+            aria-describedby={moveDialogDescriptionId}
+            className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+          >
+            <h2 id={moveDialogTitleId} className="text-lg font-bold text-gray-950 dark:text-white">
+              Mover proyecto
+            </h2>
+            <p id={moveDialogDescriptionId} className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+              Elige a qué sección mover <span className="font-medium">{moveProject.title}</span>.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-2">
+              {COLUMNS.map(column => {
+                const isCurrent = (moveProject.plazo || '') === column.id;
+
+                return (
+                  <button
+                    key={column.id}
+                    type="button"
+                    disabled={isMovingProject || isCurrent}
+                    onClick={() => moveProjectToColumn(moveProject, column.id)}
+                    className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <span>{column.title}</span>
+                    {isCurrent ? <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Actual</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={isMovingProject}
+              onClick={() => setMoveProject(null)}
+              className="mt-4 w-full rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

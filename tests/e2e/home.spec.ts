@@ -65,6 +65,40 @@ test('creates a project in the Tareas board section', async ({ page }) => {
   await expect(tasksSection.getByRole('heading', { name: 'Trabajo suelto en E2E' })).toBeVisible();
 });
 
+test('moves a project from the touch long-press selector', async ({ page }) => {
+  await page.goto('/');
+
+  const projectCard = page.getByTestId('project-card-e2e-project-launch');
+  await projectCard.dispatchEvent('pointerdown', {
+    pointerType: 'touch',
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+  });
+  await page.waitForTimeout(650);
+  await projectCard.dispatchEvent('pointerup', {
+    pointerType: 'touch',
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    buttons: 0,
+  });
+
+  const moveDialog = page.getByRole('dialog', { name: 'Mover proyecto' });
+  await expect(moveDialog).toBeVisible();
+  await moveDialog.getByRole('button', { name: 'Tareas' }).click();
+
+  await expect(
+    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Lanzamiento del producto' }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(
+    page.getByTestId('project-section-Tareas').getByRole('heading', { name: 'Lanzamiento del producto' }),
+  ).toBeVisible();
+});
+
 test('creates and completes a task against mutable e2e fixtures', async ({ page }) => {
   await page.goto('/projects/e2e-project-launch');
 
