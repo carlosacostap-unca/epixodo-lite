@@ -2,8 +2,11 @@
 import { useState, useEffect } from 'react';
 import { Project } from '@/types';
 import Link from 'next/link';
-import { pb } from '@/lib/pocketbase';
 import { useRouter } from 'next/navigation';
+import { formatProjectDate } from '@/lib/formatDate';
+import { updateProjectOrder } from '@/lib/data';
+
+type ProjectPlazo = Project['plazo'];
 
 const COLUMNS = [
   { id: 'Corto', title: 'Corto Plazo', color: 'bg-red-50/50 dark:bg-red-900/10', headerColor: 'text-red-600 dark:text-red-400' },
@@ -49,7 +52,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     const targetPlazo = targetProject.plazo || '';
     
     // Obtener los proyectos de la columna destino (excluyendo el que se está moviendo)
-    let columnProjects = projects.filter(p => (p.plazo || '') === targetPlazo && p.id !== draggedId);
+    const columnProjects = projects.filter(p => (p.plazo || '') === targetPlazo && p.id !== draggedId);
     // Asegurarse de que están ordenados por su orden actual o índice
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -57,7 +60,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     const targetIndex = columnProjects.findIndex(p => p.id === targetProjectId);
     
     // Insertar el proyecto arrastrado en la nueva posición
-    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: targetPlazo as any });
+    columnProjects.splice(targetIndex, 0, { ...draggedProject, plazo: targetPlazo });
 
     // Reasignar los valores de "order" (0, 1, 2, ...)
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
@@ -74,9 +77,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
 
     // Guardar los cambios en PocketBase
     try {
-      await Promise.all(updatedProjects.map(up => 
-        pb.collection('projects').update(up.id, { plazo: up.plazo, order: up.order })
-      ));
+      await updateProjectOrder(updatedProjects);
       router.refresh();
     } catch (error) {
       console.error('Error updating project orders:', error);
@@ -86,7 +87,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     }
   };
 
-  const handleDropOnColumn = async (e: React.DragEvent, newPlazo: string) => {
+  const handleDropOnColumn = async (e: React.DragEvent, newPlazo: ProjectPlazo) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('projectId');
     if (!draggedId) return;
@@ -95,10 +96,10 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     if (!draggedProject) return;
 
     // Si ya está en la columna y se soltó en la columna (no sobre un proyecto específico), lo ponemos al final
-    let columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== draggedId);
+    const columnProjects = projects.filter(p => (p.plazo || '') === newPlazo && p.id !== draggedId);
     columnProjects.sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    columnProjects.push({ ...draggedProject, plazo: newPlazo as any });
+    columnProjects.push({ ...draggedProject, plazo: newPlazo });
 
     const updatedProjects = columnProjects.map((p, index) => ({ ...p, order: index }));
 
@@ -113,9 +114,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
     });
 
     try {
-      await Promise.all(updatedProjects.map(up => 
-        pb.collection('projects').update(up.id, { plazo: up.plazo, order: up.order })
-      ));
+      await updateProjectOrder(updatedProjects);
       router.refresh();
     } catch (error) {
       console.error('Error updating project orders:', error);
@@ -162,7 +161,7 @@ export default function ProjectBoard({ initialProjects }: { initialProjects: Pro
                     </p>
                     <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50 dark:border-gray-700/50">
                       <div className="text-xs font-medium text-gray-500 bg-gray-50 dark:bg-gray-900/50 px-2.5 py-1.5 rounded-md">
-                        {new Date(project.created).toLocaleDateString()}
+                        {formatProjectDate(project.created)}
                       </div>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded-full">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>

@@ -20,6 +20,29 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## OpenSpec
+
+This project includes OpenSpec for spec-driven changes. OpenSpec artifacts live in `openspec/`, and Codex skills live in `.codex/skills/`.
+
+Useful commands:
+
+```bash
+npm run openspec -- list
+npm run openspec:validate
+```
+
+In Codex, restart the app if needed so the generated slash commands are available, then start a change with:
+
+```text
+/opsx:propose "describe the change"
+```
+
+## Playwright
+
+End-to-end tests live in `tests/e2e/`. Install browsers with `npm run test:e2e:install`, then run the suite with `npm run test:e2e`.
+
+The E2E server runs with mutable local fixtures from `lib/e2eFixtures.ts` instead of calling PocketBase, so browser tests are stable without external data or network access. Each test resets the in-memory fixture store through the internal `/api/e2e` route.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

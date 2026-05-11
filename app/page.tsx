@@ -1,4 +1,4 @@
-import { pb } from '@/lib/pocketbase';
+import { getProjects } from '@/lib/data';
 import { Project } from '@/types';
 import CreateProject from './components/CreateProject';
 import ProjectSearch from './components/ProjectSearch';
@@ -12,12 +12,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   let projects: Project[] = [];
   try {
-    const options: any = { sort: 'order,-created' };
-    if (q) {
-      options.filter = `title ~ "${q}" || description ~ "${q}"`;
-    }
-    const records = await pb.collection('projects').getFullList<Project>(options);
-    projects = records;
+    projects = await getProjects(q);
   } catch (error) {
     console.error("Error al obtener proyectos:", error);
   }

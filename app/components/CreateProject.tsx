@@ -1,23 +1,32 @@
 'use client';
 import { useState } from 'react';
-import { pb } from '@/lib/pocketbase';
 import { useRouter } from 'next/navigation';
+import type { Project } from '@/types';
+import { createProject } from '@/lib/data';
+
+type ProjectPlazo = Project['plazo'];
 
 export default function CreateProject() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [plazo, setPlazo] = useState<'Corto' | 'Mediano' | 'Largo' | ''>('');
+  const [plazo, setPlazo] = useState<ProjectPlazo>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setError('Agrega un título para crear el proyecto.');
+      return;
+    }
+
     setIsLoading(true);
+    setError('');
     try {
-      await pb.collection('projects').create({
-        title,
+      await createProject({
+        title: trimmedTitle,
         description,
         plazo,
       });
@@ -27,7 +36,7 @@ export default function CreateProject() {
       router.refresh();
     } catch (error) {
       console.error('Error creating project:', error);
-      alert('Error al crear el proyecto. Revisa la consola para más detalles.');
+      setError('No se pudo crear el proyecto. Revisa los datos e inténtalo de nuevo.');
     } finally {
       setIsLoading(false);
     }
@@ -43,17 +52,30 @@ export default function CreateProject() {
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div className="md:col-span-4">
+          <label htmlFor="project-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Título
+          </label>
           <input
+            id="project-title"
             type="text"
             placeholder="Título del proyecto"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (error) setError('');
+            }}
             className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             disabled={isLoading}
+            required
+            aria-describedby={error ? 'create-project-error' : undefined}
           />
         </div>
         <div className="md:col-span-4">
+          <label htmlFor="project-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Descripción
+          </label>
           <input
+            id="project-description"
             type="text"
             placeholder="Descripción breve (opcional)"
             value={description}
@@ -62,10 +84,11 @@ export default function CreateProject() {
             disabled={isLoading}
           />
         </div>
-        <div className="md:col-span-4 flex gap-3">
+        <div className="md:col-span-4 flex gap-3 items-end">
           <select
+            aria-label="Plazo del proyecto"
             value={plazo}
-            onChange={(e: any) => setPlazo(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlazo(e.target.value as ProjectPlazo)}
             className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl dark:bg-gray-900 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             disabled={isLoading}
           >
@@ -74,15 +97,20 @@ export default function CreateProject() {
             <option value="Mediano">Mediano Plazo</option>
             <option value="Largo">Largo Plazo</option>
           </select>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading || !title.trim()}
             className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-sm font-medium whitespace-nowrap"
           >
-            {isLoading ? '...' : 'Crear'}
+            {isLoading ? 'Creando...' : 'Crear'}
           </button>
         </div>
       </div>
+      {error ? (
+        <p id="create-project-error" role="alert" className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 }

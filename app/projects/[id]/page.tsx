@@ -1,10 +1,10 @@
-import { pb } from '@/lib/pocketbase';
 import { Project, Task } from '@/types';
 import Link from 'next/link';
 import CreateTask from '@/app/components/CreateTask';
 import TaskItem from '@/app/components/TaskItem';
 import EditableProject from '@/app/components/EditableProject';
 import TaskSearch from '@/app/components/TaskSearch';
+import { getProject, getTasks } from '@/lib/data';
 
 export const revalidate = 0; 
 
@@ -24,17 +24,8 @@ export default async function ProjectPage({
   let tasks: Task[] = [];
 
   try {
-    project = await pb.collection('projects').getOne<Project>(projectId);
-    
-    let filterStr = `project = "${projectId}"`;
-    if (tq) {
-      filterStr += ` && title ~ "${tq}"`;
-    }
-
-    tasks = await pb.collection('tasks').getFullList<Task>({
-      filter: filterStr,
-      sort: 'created',
-    });
+    project = await getProject(projectId);
+    tasks = await getTasks(projectId, tq);
   } catch (error) {
     console.error("Error al obtener datos del proyecto:", error);
   }
