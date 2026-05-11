@@ -33,7 +33,10 @@ function normalizeWhitespace(value: string) {
 
 export function fallbackTaskTitle(transcript: string) {
   const normalized = normalizeWhitespace(transcript)
-    .replace(/^(bueno|eh|em|este|por favor|recordame que|tengo que)\s+/i, '')
+    .replace(
+      /^(bueno|eh|em|este|por favor|recordame que|recordar que|tengo que|hay que|necesito que|quiero que|me gustaria que)\s+/i,
+      '',
+    )
     .replace(/[.?!]+$/g, '');
 
   if (!normalized) return 'Nueva tarea';
@@ -115,7 +118,16 @@ export async function analyzeTaskRouting(transcript: string, projects: ProjectCa
         {
           role: 'system',
           content:
-            'Analiza tareas dictadas en espanol. Devuelve un titulo breve y decide si corresponde asignarla a un proyecto existente. Solo usa confidence high cuando el proyecto es claramente mencionado o inferible sin ambiguedad. Si no, deja projectId en null.',
+            [
+              'Analiza tareas dictadas en espanol rioplatense.',
+              'No copies la transcripcion literal: transforma el texto hablado en un titulo breve, limpio y accionable.',
+              'Elimina muletillas, repeticiones, saludos, explicaciones meta y frases como "tengo que", "me gustaria", "recordame que".',
+              'El titulo debe ser natural para una lista de tareas, idealmente entre 3 y 10 palabras.',
+              'No inventes informacion que no este en el audio.',
+              'Decide si corresponde asignarla a un proyecto existente.',
+              'Solo usa confidence high cuando el proyecto es claramente mencionado o inferible sin ambiguedad.',
+              'Si no hay confianza alta, deja projectId en null.',
+            ].join(' '),
         },
         {
           role: 'user',

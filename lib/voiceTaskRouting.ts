@@ -1,8 +1,6 @@
 import { analyzeTaskRouting, fallbackTaskTitle, type ProjectCandidate, type TaskRoutingAnalysis } from '@/lib/aiTaskRouting';
 import { createE2ETask, listE2EProjects } from '@/lib/e2eStore';
 import { pb } from '@/lib/pocketbase';
-import { getOrCreateUnassignedTasksProject } from '@/lib/unassignedTaskStore';
-import { isUnassignedTasksProject } from '@/lib/unassignedTasks';
 import type { Project, Task } from '@/types';
 
 const useE2EFixtures = process.env.NEXT_PUBLIC_E2E_MOCKS === '1';
@@ -26,14 +24,14 @@ function toCandidate(project: Project): ProjectCandidate {
 
 export async function listProjectCandidatesForRouting() {
   if (useE2EFixtures) {
-    return listE2EProjects().filter((project) => !isUnassignedTasksProject(project)).map(toCandidate);
+    return listE2EProjects().map(toCandidate);
   }
 
   const projects = await pb.collection('projects').getFullList<Project>({
     sort: 'order,-created',
   });
 
-  return projects.filter((project) => !isUnassignedTasksProject(project)).map(toCandidate);
+  return projects.map(toCandidate);
 }
 
 function normalizeRouting(analysis: TaskRoutingAnalysis, projects: ProjectCandidate[]) {
@@ -66,11 +64,10 @@ export async function createRoutedVoiceTask(transcript: string): Promise<RoutedV
   }
 
   const { taskTitle, matchedProject, confidence } = normalizeRouting(analysis, projects);
-  const targetProject = matchedProject || (await getOrCreateUnassignedTasksProject());
   const taskInput = {
     title: taskTitle,
     is_completed: false,
-    project: targetProject.id,
+    ...(matchedProject ? { project: matchedProject.id } : {}),
   };
 
   const task = useE2EFixtures ? createE2ETask(taskInput) : await pb.collection('tasks').create<Task>(taskInput);
